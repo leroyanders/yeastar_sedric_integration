@@ -6,6 +6,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { Logger } from '@nestjs/common';
 import { IInnerMessage, IOuterMessage } from './pbx-events.interface';
+import { YeastarService } from '../yeastar/yeastar.service';
 
 @WebSocketGateway()
 export class PbxEventsGateway {
@@ -16,6 +17,7 @@ export class PbxEventsGateway {
 
   constructor(
     private configService: ConfigService,
+    private yeastarService: YeastarService,
     @InjectQueue('pbx') private readonly pbxQueue: Queue,
   ) {}
 
@@ -52,11 +54,26 @@ export class PbxEventsGateway {
     });
   }
 
-  async initialize(accessToken: string) {
+  async initialize(accessToken: string, expireTime: number) {
     this.logger.debug('Attempting to connect to PBX WebSocket...');
 
     this.accessToken = accessToken;
     this.pbxUrl = `${this.pbxDomain}=${this.accessToken}`;
+
+    // Auto-update accessToken for PBX
+    setTimeout(async () => {
+      this.yeastarService
+        .initialize()
+        .then(async (update) => {
+          this.accessToken = update.accessToken;
+          await this.initialize(accessToken, update.expireTime);
+        })
+        .catch((err) => {
+          this.logger.error(
+            `Error Initializing PBX WebSocket Server: ${err.message}`,
+          );
+        });
+    }, expireTime);
 
     this.registerEmitter('connect', () => {
       this.sendMessage(JSON.stringify({ topic_list: [30012] }));

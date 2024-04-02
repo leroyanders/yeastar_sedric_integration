@@ -15,8 +15,9 @@ import { saveFile } from '../utils/file-system';
 export class YeastarService {
   private readonly logger = new Logger(YeastarService.name);
 
-  private accessToken: string | null = null;
-  private refreshToken: string | null = null;
+  private accessToken: string = null;
+  private refreshToken: string = null;
+  private expireTime: number = null;
 
   constructor(
     private httpService: HttpService,
@@ -37,7 +38,6 @@ export class YeastarService {
 
         this.updateTokensAndScheduleNextRefresh(authData);
       } catch (err) {
-        this.accessToken = 'test';
         this.logger.debug('Failed to get initial access token:', err.message);
       }
     }
@@ -45,16 +45,20 @@ export class YeastarService {
     return {
       accessToken: this.accessToken,
       refreshToken: this.refreshToken,
+      expireTime: this.expireTime,
     };
   }
 
   updateTokensAndScheduleNextRefresh(authData: IApiTokenResponse) {
     this.accessToken = authData.access_token;
     this.refreshToken = authData.refresh_token;
+    this.expireTime = authData.access_token_expire_time;
 
     // Schedule the next refresh slightly before the current token expires
     const refreshInterval = authData.access_token_expire_time;
     setTimeout(() => this.refreshTokenCycle(), refreshInterval);
+
+    return authData;
   }
 
   async refreshTokenCycle() {

@@ -35,10 +35,10 @@ export class ScriptModule implements OnModuleInit {
 
   async onModuleInit() {
     // 1. Auth
-    const { accessToken } = await this.yeastarService.initialize();
+    const { accessToken, expireTime } = await this.yeastarService.initialize();
 
     // 2. Init Gateway
-    await this.pbxGateway.initialize(accessToken);
+    await this.pbxGateway.initialize(accessToken, expireTime);
 
     // 3. Fetch records & save to array
     this.yeastarService
