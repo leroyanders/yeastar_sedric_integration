@@ -10,10 +10,9 @@ import { IInnerMessage, IOuterMessage } from './pbx-events.interface';
 @WebSocketGateway()
 export class PbxEventsGateway {
   private readonly logger = new Logger(PbxEventsGateway.name);
-
-  private accessToken = this.configService.get('PBX_ACCESS_TOKEN');
   private pbxDomain = this.configService.get('PBX_WEBSOCKET_URL');
-  private pbxUrl = `${this.pbxDomain}=${this.accessToken}`;
+  private accessToken = null;
+  private pbxUrl = null;
 
   constructor(
     private configService: ConfigService,
@@ -55,6 +54,9 @@ export class PbxEventsGateway {
 
   async initialize(accessToken: string) {
     this.logger.debug('Attempting to connect to PBX WebSocket...');
+
+    this.accessToken = accessToken;
+    this.pbxUrl = `${this.pbxDomain}=${this.accessToken}`;
 
     this.registerEmitter('connect', () => {
       this.sendMessage(JSON.stringify({ topic_list: [30012] }));
