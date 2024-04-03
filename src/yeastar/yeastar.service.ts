@@ -105,7 +105,7 @@ export class YeastarService {
         ),
       );
     } catch (err) {
-      throw new Error(`Authentication failed: ${err.message}`);
+      throw new Error(err);
     }
   }
 
@@ -133,7 +133,7 @@ export class YeastarService {
           ),
       );
     } catch (err) {
-      throw new Error(`Authentication failed: ${err}`);
+      throw new Error(err);
     }
   }
 
