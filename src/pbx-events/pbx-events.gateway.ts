@@ -91,10 +91,13 @@ export class PbxEventsGateway {
           const json = JSON.parse(data.message) as IOuterMessage;
           const record = (JSON.parse(json.msg) as IInnerMessage) || json.msg;
 
-          await this.pbxQueue.add('pbx_process', {
-            record: record,
-            accessToken,
-          });
+          // Publish only received records nothing else
+          if ((record as IInnerMessage).type) {
+            await this.pbxQueue.add('pbx_process', {
+              record: record,
+              accessToken,
+            });
+          }
         }
       });
     });
