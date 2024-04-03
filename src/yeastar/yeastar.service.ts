@@ -90,17 +90,28 @@ export class YeastarService {
       'User-Agent': 'OpenAPI',
     };
 
+    const data = JSON.stringify({
+      username: username,
+      password: password,
+    });
+
+    const config = {
+      method: 'post',
+      maxBodyLength: Infinity,
+      url: apiUrl,
+      headers,
+      data: data,
+    };
+
     try {
       return await firstValueFrom(
-        this.httpService.post(apiUrl, { username, password }, { headers }).pipe(
-          map((response) => {
-            const authResponse = response.data as IApiTokenResponse;
-
-            if (authResponse.errcode !== 0) {
-              throw new Error(authResponse.errmsg);
+        this.httpService.request(config).pipe(
+          map((response: AxiosResponse<IApiTokenResponse>) => {
+            if (response.data.errcode !== 0) {
+              throw new Error(response.data.errmsg);
             }
 
-            return authResponse;
+            return response.data;
           }),
         ),
       );
@@ -113,24 +124,32 @@ export class YeastarService {
     const apiUrl = `${this.configService.get('YEASTAR_API_URL')}/refresh_token`;
     const headers = {
       'Content-Type': 'application/json',
-      'User-Agent': 'OpenAPI', // As required by Yeastar API
+      'User-Agent': 'OpenAPI',
+    };
+
+    const data = JSON.stringify({
+      refreshToken: refreshToken,
+    });
+
+    const config = {
+      method: 'post',
+      maxBodyLength: Infinity,
+      url: apiUrl,
+      headers,
+      data: data,
     };
 
     try {
       return await firstValueFrom(
-        this.httpService
-          .post(apiUrl, { refresh_token: refreshToken }, { headers })
-          .pipe(
-            map((response) => {
-              const authResponse = response.data as IApiTokenResponse;
+        this.httpService.request(config).pipe(
+          map((response: AxiosResponse<IApiTokenResponse>) => {
+            if (response.data.errcode !== 0) {
+              throw new Error(response.data.errmsg);
+            }
 
-              if (authResponse.errcode !== 0) {
-                throw new Error(authResponse.errmsg);
-              }
-
-              return authResponse;
-            }),
-          ),
+            return response.data;
+          }),
+        ),
       );
     } catch (err) {
       throw new Error(err);
