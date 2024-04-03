@@ -41,6 +41,8 @@ export class YeastarService {
               }
 
               this.updateTokensAndScheduleNextRefresh(data);
+              this.initializeWebSocketGateway(data);
+
               resolve(data);
             })
             .catch((err) => {
