@@ -9,10 +9,15 @@ import {
   ICallRecord,
 } from '../yeastar/yeastar.interface';
 import { Queue } from 'bull';
+import { Agent } from 'https';
 
 @Module({
   imports: [
-    HttpModule,
+    HttpModule.register({
+      httpsAgent: new Agent({
+        rejectUnauthorized: false,
+      }),
+    }),
     PbxEventsModule,
     BullModule.registerQueue({
       name: 'pbx',
