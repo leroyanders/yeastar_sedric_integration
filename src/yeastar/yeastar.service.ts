@@ -11,6 +11,7 @@ import {
 import axios, { AxiosResponse } from 'axios';
 import { PbxEventsGateway } from '../pbx-events/pbx-events.gateway';
 import { createWriteStream } from 'fs';
+import { downloadPath } from '../utils/file-system';
 
 @Injectable()
 export class YeastarService {
@@ -253,12 +254,12 @@ export class YeastarService {
         }
 
         this.logger.debug(`Downloading recording to: ${savePath}`);
-        const fileStream = createWriteStream(savePath);
+        const fileStream = createWriteStream(downloadPath(savePath));
 
         response.pipe(fileStream);
         fileStream.on('finish', () => {
           fileStream.close();
-          resolve(savePath);
+          resolve(downloadPath(savePath));
           this.logger.debug(`Recording downloaded at: ${savePath}`);
         });
 
@@ -270,6 +271,6 @@ export class YeastarService {
       request.on('error', (error) => reject(error));
     });
 
-    return savePath; // Return the save path
+    return downloadPath(savePath);
   }
 }
