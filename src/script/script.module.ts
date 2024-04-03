@@ -2,7 +2,6 @@ import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { YeastarService } from '../yeastar/yeastar.service';
 import { HttpModule } from '@nestjs/axios';
 import { PbxEventsGateway } from '../pbx-events/pbx-events.gateway';
-import { PbxEventsModule } from '../pbx-events/pbx-events.module';
 import { BullModule, InjectQueue } from '@nestjs/bull';
 import {
   IApiRecordsListResponse,
@@ -10,6 +9,7 @@ import {
 } from '../yeastar/yeastar.interface';
 import { Queue } from 'bull';
 import { Agent } from 'https';
+import { PbxEventsModule } from '../pbx-events/pbx-events.module';
 
 @Module({
   imports: [
@@ -18,10 +18,10 @@ import { Agent } from 'https';
         rejectUnauthorized: false,
       }),
     }),
-    PbxEventsModule,
     BullModule.registerQueue({
       name: 'pbx',
     }),
+    PbxEventsModule,
   ],
   providers: [YeastarService, PbxEventsGateway],
 })
@@ -34,47 +34,50 @@ export class ScriptModule implements OnModuleInit {
 
   constructor(
     private yeastarService: YeastarService,
-    private pbxGateway: PbxEventsGateway,
     @InjectQueue('pbx') private readonly pbxQueue: Queue,
   ) {}
 
   async onModuleInit() {
     // 1. Auth
-    const { accessToken, expireTime } = await this.yeastarService.initialize();
-
-    // 2. Init Gateway
-    await this.pbxGateway.initialize(accessToken, expireTime);
-
-    // 3. Fetch records & save to array
     this.yeastarService
-      .fetchRecordingList(accessToken, this.page, this.pageSize)
-      .then(async (recordingList: IApiRecordsListResponse) => {
-        const { total_number } = recordingList;
-        this.pagesCount = Math.ceil(total_number / this.pageSize);
+      .initialize()
+      .then(async ({ accessToken }) => {
+        this.logger.log(accessToken);
 
-        for (this.page; this.page <= this.pagesCount; this.page++) {
-          const response = await this.yeastarService.fetchRecordingList(
-            accessToken,
-            this.page,
-            this.pageSize,
-          );
-
-          // 4. Save records
-          response.data.forEach((record) => this.recordsList.push(record));
-
-          // 5. Send each record to queue
-          if (this.page === this.pagesCount) {
-            for (const record of this.recordsList) {
-              await this.pbxQueue.add('process', {
-                record,
-                accessToken,
-              });
-            }
-          }
-        }
+        // 3. Fetch records & save to array
+        // this.yeastarService
+        //   .fetchRecordingList(accessToken, this.page, this.pageSize)
+        //   .then(async (recordingList: IApiRecordsListResponse) => {
+        //     const { total_number } = recordingList;
+        //     this.pagesCount = Math.ceil(total_number / this.pageSize);
+        //
+        //     for (this.page; this.page <= this.pagesCount; this.page++) {
+        //       const response = await this.yeastarService.fetchRecordingList(
+        //         accessToken,
+        //         this.page,
+        //         this.pageSize,
+        //       );
+        //
+        //       // 4. Save records
+        //       response.data.forEach((record) => this.recordsList.push(record));
+        //
+        //       // 5. Send each record to queue
+        //       if (this.page === this.pagesCount) {
+        //         for (const record of this.recordsList) {
+        //           await this.pbxQueue.add('process', {
+        //             record,
+        //             accessToken,
+        //           });
+        //         }
+        //       }
+        //     }
+        //   })
+        //   .catch((err) => {
+        //     this.logger.error(err.message);
+        //   });
       })
       .catch((err) => {
-        this.logger.error(err.message);
+        this.logger.error(err);
       });
   }
 }

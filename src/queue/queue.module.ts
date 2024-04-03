@@ -5,6 +5,7 @@ import { YeastarService } from '../yeastar/yeastar.service';
 import { HttpModule } from '@nestjs/axios';
 import { SedricService } from '../sedric/sedric.service';
 import { Agent } from 'https';
+import { PbxEventsGateway } from '../pbx-events/pbx-events.gateway';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { Agent } from 'https';
       }),
     }),
   ],
-  providers: [QueueProcessor, YeastarService, SedricService],
+  providers: [QueueProcessor, YeastarService, SedricService, PbxEventsGateway],
   exports: [BullModule],
 })
 export class QueueModule {}

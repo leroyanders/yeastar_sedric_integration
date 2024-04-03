@@ -141,9 +141,7 @@ export class QueueProcessor {
   @Process('pbx_process')
   handlePBXProcess(job: Job<{ record: IInnerMessage; accessToken: string }>) {
     this.logger.debug(
-      'PBX',
-      'Check for exciting record locally...',
-      job.data.record.call_id,
+      `PBX: Check for exciting record locally...: ${job.data.record.call_id}`,
     );
 
     // 6. Check for exciting record locally for PBX

@@ -8,8 +8,9 @@ import {
   IApiRecordDownloadResponse,
   IApiRecordsListResponse,
 } from './yeastar.interface';
-import { AxiosResponse } from 'axios';
+import axios, { AxiosResponse } from 'axios';
 import { saveFile } from '../utils/file-system';
+import { PbxEventsGateway } from '../pbx-events/pbx-events.gateway';
 
 @Injectable()
 export class YeastarService {
@@ -22,6 +23,7 @@ export class YeastarService {
   constructor(
     private httpService: HttpService,
     private configService: ConfigService,
+    private pbxGateway: PbxEventsGateway,
   ) {}
 
   async initialize() {
@@ -31,14 +33,22 @@ export class YeastarService {
     // Auth
     if (!this.accessToken || !this.refreshToken) {
       try {
-        const authData: IApiTokenResponse = await this.getAccessToken(
-          username,
-          password,
-        );
+        await new Promise((resolve, reject) => {
+          this.getAccessToken(username, password)
+            .then((data) => {
+              if (data.errcode !== 0) {
+                reject(data.errmsg);
+              }
 
-        this.updateTokensAndScheduleNextRefresh(authData);
+              this.updateTokensAndScheduleNextRefresh(data);
+              resolve(data);
+            })
+            .catch((err) => {
+              reject(err);
+            });
+        });
       } catch (err) {
-        this.logger.debug('Failed to get initial access token:', err.message);
+        throw new Error(err.message);
       }
     }
 
@@ -49,48 +59,81 @@ export class YeastarService {
     };
   }
 
+  async initializeWebSocketGateway(data: IApiTokenResponse) {
+    await this.pbxGateway.initialize(data);
+  }
+
   updateTokensAndScheduleNextRefresh(authData: IApiTokenResponse) {
     this.accessToken = authData.access_token;
     this.refreshToken = authData.refresh_token;
-    this.expireTime = authData.access_token_expire_time;
+    this.expireTime = authData.access_token_expire_time * 100;
 
     // Schedule the next refresh slightly before the current token expires
-    const refreshInterval = authData.access_token_expire_time;
-    setTimeout(() => this.refreshTokenCycle(), refreshInterval);
+    const refreshInterval = authData.access_token_expire_time * 100;
+
+    this.logger.debug(`Token will be refreshed in: ${refreshInterval}`);
+    setTimeout(async () => {
+      await this.refreshTokenCycle();
+      await this.initializeWebSocketGateway(authData);
+    }, refreshInterval);
 
     return authData;
   }
 
   async refreshTokenCycle() {
-    try {
-      const refreshData: IApiTokenResponse = await this.refreshAccessToken(
-        this.refreshToken,
-      );
-      this.updateTokensAndScheduleNextRefresh(refreshData);
-    } catch (err) {
-      this.logger.error(
-        'Failed to refresh token, attempting to reinitialize:',
-        err,
-      );
+    const refreshData: IApiTokenResponse = await this.refreshAccessToken(
+      this.refreshToken,
+    );
 
-      // If refresh fails, attempt to reinitialize
-      this.initialize().catch((initializeErr) =>
-        this.logger.error(
-          'Failed to reinitialize after refresh failure:',
-          initializeErr,
-        ),
-      );
-    }
+    this.logger.debug('Token was refreshed');
+    console.log(refreshData);
+    this.updateTokensAndScheduleNextRefresh(refreshData);
   }
 
   async getAccessToken(username: string, password: string) {
     const apiUrl = `${this.configService.get('YEASTAR_API_URL')}/get_token`;
+
+    const config = {
+      method: 'post',
+      url: apiUrl,
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'OpenAPI',
+        Host: '192.168.70.245:8088',
+      },
+      data: {
+        username,
+        password,
+      },
+    };
+
+    try {
+      const response: AxiosResponse<IApiTokenResponse> =
+        await axios.request(config);
+      this.accessToken = response.data.access_token;
+      this.refreshToken = response.data.refresh_token;
+      this.expireTime = response.data.access_token_expire_time;
+
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async refreshAccessToken(refreshToken: string) {
+    this.logger.debug('Refreshing access token');
+
+    const username = this.configService.get('YEASTAR_API_USERNAME');
+    const password = this.configService.get('YEASTAR_API_PASSWORD');
+    const apiUrl = `${this.configService.get('YEASTAR_API_URL')}/refresh_token`;
     const headers = {
       'Content-Type': 'application/json',
       'User-Agent': 'OpenAPI',
+      Host: '192.168.70.245:8088',
     };
 
     const data = JSON.stringify({
+      refreshToken: refreshToken,
       username: username,
       password: password,
     });
@@ -104,55 +147,16 @@ export class YeastarService {
     };
 
     try {
-      return await firstValueFrom(
-        this.httpService.request(config).pipe(
-          map((response: AxiosResponse<IApiTokenResponse>) => {
-            if (response.data.errcode !== 0) {
-              throw new Error(response.data.errmsg);
-            }
+      const response: AxiosResponse<IApiTokenResponse> =
+        await axios.request(config);
+      this.accessToken = response.data.access_token;
+      this.refreshToken = response.data.refresh_token;
+      this.expireTime = response.data.access_token_expire_time;
 
-            return response.data;
-          }),
-        ),
-      );
-    } catch (err) {
-      throw new Error(err);
-    }
-  }
-
-  async refreshAccessToken(refreshToken: string) {
-    const apiUrl = `${this.configService.get('YEASTAR_API_URL')}/refresh_token`;
-    const headers = {
-      'Content-Type': 'application/json',
-      'User-Agent': 'OpenAPI',
-    };
-
-    const data = JSON.stringify({
-      refreshToken: refreshToken,
-    });
-
-    const config = {
-      method: 'post',
-      maxBodyLength: Infinity,
-      url: apiUrl,
-      headers,
-      data: data,
-    };
-
-    try {
-      return await firstValueFrom(
-        this.httpService.request(config).pipe(
-          map((response: AxiosResponse<IApiTokenResponse>) => {
-            if (response.data.errcode !== 0) {
-              throw new Error(response.data.errmsg);
-            }
-
-            return response.data;
-          }),
-        ),
-      );
-    } catch (err) {
-      throw new Error(err);
+      this.logger.debug('Access token refreshed...');
+      return response.data;
+    } catch (error) {
+      throw error;
     }
   }
 

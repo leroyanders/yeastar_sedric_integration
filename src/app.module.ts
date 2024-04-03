@@ -1,11 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { YeastarService } from './yeastar/yeastar.service';
-import { SedricService } from './sedric/sedric.service';
 import { HttpModule } from '@nestjs/axios';
 import { BullModule } from '@nestjs/bull';
 import { QueueModule } from './queue/queue.module';
-import { PbxEventsModule } from './pbx-events/pbx-events.module';
 import { ScriptModule } from './script/script.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -24,8 +21,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ScriptModule,
     QueueModule,
     HttpModule,
-    PbxEventsModule,
   ],
-  providers: [YeastarService, SedricService],
+  providers: [],
 })
 export class AppModule {}
