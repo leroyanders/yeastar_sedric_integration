@@ -1,28 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { map } from 'rxjs/operators';
 import { ConfigService } from '@nestjs/config';
-import { catchError, firstValueFrom } from 'rxjs';
 import fs from 'fs';
 import mime from 'mime-types';
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
+import { IUploadUrlResponse } from './sedric.interface';
 
 @Injectable()
 export class SedricService {
-  constructor(
-    private httpService: HttpService,
-    private configService: ConfigService,
-  ) {}
+  constructor(private configService: ConfigService) {}
 
-  async uploadRecording(filePath: string, uploadUrl: string): Promise<any> {
+  async uploadRecording(
+    filePath: string,
+    upload: IUploadUrlResponse,
+  ): Promise<any> {
     // Create a stream from the file
     const stream = fs.createReadStream(filePath);
-
     // Determine the file's MIME type based on its extension, defaulting to 'application/octet-stream'
     const mimeType = mime.lookup(filePath) || 'application/octet-stream';
 
     try {
-      const response = await axios.put(uploadUrl, stream, {
+      const response = await axios.put(upload.url, stream, {
         headers: {
           'Content-Type': mimeType,
         },
@@ -36,7 +33,7 @@ export class SedricService {
       throw error;
     }
   }
-  async generateUploadUrl(data: {
+  async generateUploadUrl(dataObject: {
     user_id: string;
     prospect_id: string;
     unit_id: string;
@@ -49,16 +46,18 @@ export class SedricService {
   }): Promise<any> {
     const apiUrl = this.configService.get('SEDRIC_API_URL');
     const url = `${apiUrl}/api_recording_uri`;
+    const data = JSON.stringify(dataObject);
+    const config = {
+      method: 'post',
+      maxBodyLength: Infinity,
+      url: url,
+      data: data,
+    };
 
     try {
-      return await firstValueFrom(
-        this.httpService.post(url, data).pipe(
-          map((response) => response.data),
-          catchError((err) => {
-            throw new Error(err.message || 'Failed to generate upload URL');
-          }),
-        ),
-      );
+      const response: AxiosResponse<IUploadUrlResponse> =
+        await axios.request(config);
+      return response.data;
     } catch (error) {
       throw error;
     }

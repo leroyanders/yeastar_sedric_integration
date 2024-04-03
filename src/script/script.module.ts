@@ -45,36 +45,36 @@ export class ScriptModule implements OnModuleInit {
         this.logger.log(accessToken);
 
         // 3. Fetch records & save to array
-        // this.yeastarService
-        //   .fetchRecordingList(accessToken, this.page, this.pageSize)
-        //   .then(async (recordingList: IApiRecordsListResponse) => {
-        //     const { total_number } = recordingList;
-        //     this.pagesCount = Math.ceil(total_number / this.pageSize);
-        //
-        //     for (this.page; this.page <= this.pagesCount; this.page++) {
-        //       const response = await this.yeastarService.fetchRecordingList(
-        //         accessToken,
-        //         this.page,
-        //         this.pageSize,
-        //       );
-        //
-        //       // 4. Save records
-        //       response.data.forEach((record) => this.recordsList.push(record));
-        //
-        //       // 5. Send each record to queue
-        //       if (this.page === this.pagesCount) {
-        //         for (const record of this.recordsList) {
-        //           await this.pbxQueue.add('process', {
-        //             record,
-        //             accessToken,
-        //           });
-        //         }
-        //       }
-        //     }
-        //   })
-        //   .catch((err) => {
-        //     this.logger.error(err.message);
-        //   });
+        this.yeastarService
+          .fetchRecordingList(accessToken, this.page, this.pageSize)
+          .then(async (recordingList: IApiRecordsListResponse) => {
+            const { total_number } = recordingList;
+            this.pagesCount = Math.ceil(total_number / this.pageSize);
+
+            for (this.page; this.page <= this.pagesCount; this.page++) {
+              const response = await this.yeastarService.fetchRecordingList(
+                accessToken,
+                this.page,
+                this.pageSize,
+              );
+
+              // 4. Save records
+              response.data.forEach((record) => this.recordsList.push(record));
+
+              // 5. Send each record to queue
+              if (this.page === this.pagesCount) {
+                for (const record of this.recordsList) {
+                  await this.pbxQueue.add('process', {
+                    record,
+                    accessToken,
+                  });
+                }
+              }
+            }
+          })
+          .catch((err) => {
+            this.logger.error(err.message);
+          });
       })
       .catch((err) => {
         this.logger.error(err);

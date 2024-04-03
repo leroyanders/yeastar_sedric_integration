@@ -9,8 +9,8 @@ import {
   IApiRecordsListResponse,
 } from './yeastar.interface';
 import axios, { AxiosResponse } from 'axios';
-import { saveFile } from '../utils/file-system';
 import { PbxEventsGateway } from '../pbx-events/pbx-events.gateway';
+import { createWriteStream } from 'fs';
 
 @Injectable()
 export class YeastarService {
@@ -219,7 +219,7 @@ export class YeastarService {
         this.httpService.get<IApiRecordDownloadResponse>(url).pipe(
           map((response) => {
             if (response.data.errcode === 0) {
-              return response.data.download_resource_url;
+              return `${apiUrl}/${response.data.download_resource_url}?access_token=${accessToken}`;
             } else {
               throw new Error(response.data.errmsg);
             }
@@ -243,7 +243,7 @@ export class YeastarService {
     const url = `${apiUrl}${downloadUrl}?access_token=${accessToken}`;
 
     await new Promise((resolve, reject) => {
-      const request = get(url, async (response) => {
+      const request = get(url, (response) => {
         if (response.statusCode !== 200) {
           return reject(
             new Error(
@@ -252,16 +252,24 @@ export class YeastarService {
           );
         }
 
-        try {
-          resolve(await saveFile(response, savePath));
-        } catch (error) {
+        this.logger.debug(`Downloading recording to: ${savePath}`);
+        const fileStream = createWriteStream(savePath);
+
+        response.pipe(fileStream);
+        fileStream.on('finish', () => {
+          fileStream.close();
+          resolve(savePath);
+          this.logger.debug(`Recording downloaded at: ${savePath}`);
+        });
+
+        fileStream.on('error', (error) => {
           reject(error);
-        }
+        });
       });
 
       request.on('error', (error) => reject(error));
     });
 
-    return savePath;
+    return savePath; // Return the save path
   }
 }
