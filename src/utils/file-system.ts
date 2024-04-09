@@ -6,7 +6,7 @@ const downloadDirectory = join(__dirname, '..', '..', 'downloads');
 export const downloadPath = (path: string) => join(downloadDirectory, path);
 
 export const handleFileCleanup = async (filePath: string): Promise<void> => {
-  await fs.unlink(downloadPath(filePath));
+  await fs.unlink(filePath);
 };
 
 export const checkFileExists = async (path: string): Promise<boolean> => {

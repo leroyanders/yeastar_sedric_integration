@@ -10,8 +10,9 @@ import {
 } from './yeastar.interface';
 import axios, { AxiosResponse } from 'axios';
 import { PbxEventsGateway } from '../pbx-events/pbx-events.gateway';
-import { createWriteStream } from 'fs';
+import { createWriteStream, mkdirSync, existsSync } from 'fs';
 import { downloadPath } from '../utils/file-system';
+import { dirname } from 'path';
 
 @Injectable()
 export class YeastarService {
@@ -243,6 +244,17 @@ export class YeastarService {
     const apiUrl = this.configService.get('YEASTAR_API_URL');
     const url = `${apiUrl}${downloadUrl}?access_token=${accessToken}`;
 
+    // Assuming downloadPath constructs the full path including 'downloads' folder
+    const fullPath = downloadPath(savePath);
+
+    // Ensure the directory part of fullPath exists
+    const directory = dirname(fullPath);
+
+    // Check if the directory path is not empty and the directory does not exist
+    if (directory && !existsSync(directory)) {
+      mkdirSync(directory, { recursive: true });
+    }
+
     await new Promise((resolve, reject) => {
       const request = get(url, (response) => {
         if (response.statusCode !== 200) {
@@ -253,14 +265,14 @@ export class YeastarService {
           );
         }
 
-        this.logger.debug(`Downloading recording to: ${savePath}`);
-        const fileStream = createWriteStream(downloadPath(savePath));
+        this.logger.debug(`Downloading recording to: ${fullPath}`);
+        const fileStream = createWriteStream(fullPath);
 
         response.pipe(fileStream);
         fileStream.on('finish', () => {
           fileStream.close();
-          resolve(downloadPath(savePath));
-          this.logger.debug(`Recording downloaded at: ${savePath}`);
+          resolve(fullPath);
+          this.logger.debug(`Recording downloaded at: ${fullPath}`);
         });
 
         fileStream.on('error', (error) => {
@@ -271,6 +283,6 @@ export class YeastarService {
       request.on('error', (error) => reject(error));
     });
 
-    return downloadPath(savePath);
+    return fullPath;
   }
 }

@@ -49,8 +49,8 @@ export class ScriptModule implements OnModuleInit {
           .fetchRecordingList(accessToken, this.page, this.pageSize)
           .then(async (recordingList: IApiRecordsListResponse) => {
             const { total_number } = recordingList;
-            this.pagesCount = Math.ceil(total_number / this.pageSize);
 
+            this.pagesCount = Math.ceil(total_number / this.pageSize);
             for (this.page; this.page <= this.pagesCount; this.page++) {
               const response = await this.yeastarService.fetchRecordingList(
                 accessToken,
@@ -73,11 +73,12 @@ export class ScriptModule implements OnModuleInit {
             }
           })
           .catch((err) => {
-            this.logger.error(err.message);
+            throw err;
           });
       })
       .catch((err) => {
         this.logger.error(err);
+        console.error(err);
       });
   }
 }

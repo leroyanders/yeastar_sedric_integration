@@ -19,8 +19,21 @@ export class QueueProcessor {
     private sedricService: SedricService,
   ) {}
 
+  @Process('delete_file')
+  async handleDeleteFile(
+    job: Job<{
+      path: string;
+    }>,
+  ) {
+    try {
+      await handleFileCleanup(job.data.path);
+    } catch (error) {
+      this.logger.error('Unable to delete file', error);
+    }
+  }
+
   @Process('pbx_download')
-  handlePBXDownload(
+  async handlePBXDownload(
     job: Job<{
       record: IInnerMessage;
       accessToken: string;
@@ -28,45 +41,57 @@ export class QueueProcessor {
     }>,
   ) {
     this.logger.debug(
-      `Downloading record from ${job.data.downloadUrl}`,
+      `Downloading record from: ${job.data.downloadUrl}`,
       job.data.record.call_id,
     );
 
-    this.yeastarService
-      .downloadRecording(
+    try {
+      const file = await this.yeastarService.downloadRecording(
         job.data.accessToken,
         job.data.downloadUrl,
         job.data.record.recording,
-      )
-      .then((file) => {
-        const extension = job.data.downloadUrl.split('.').pop();
+      );
 
-        // 8. Publish record
-        this.sedricService
-          .generateUploadUrl({
-            user_id: this.configService.get('SEDRIC_USER_ID'),
-            prospect_id: job.data.record.call_to,
-            unit_id: this.configService.get('SEDRIC_UNIT_ID'),
-            recording_type: extension,
-            timestamp: job.data.record.time_start,
-            topic: 'New CDR',
-            api_key: this.configService.get('SEDRIC_API_KEY'),
-          })
-          .then(async (url) => {
-            try {
-              await this.sedricService.uploadRecording(file, url);
-              await handleFileCleanup(file);
-            } catch (e) {
-              this.logger.error(e.message);
-            }
-          })
-          .catch((err) => {
-            this.logger.error(`Error during publishing record: ${err.message}`);
-          });
-      })
-      .catch((err) => {
-        this.logger.error(`Couldn't download recording: ${err.message}`);
+      const { user_id, metadata } = this.sedricService.parseUserId(
+        job.data.record.call_from,
+      );
+
+      const extension = job.data.downloadUrl
+        .split('.')
+        .pop()
+        .split('?')[0]
+        .slice(0, 3);
+
+      const url = await this.sedricService.generateUploadUrl({
+        user_id,
+        prospect_id: job.data.record.call_to,
+        unit_id: this.configService.get('SEDRIC_UNIT_ID'),
+        recording_type: extension,
+        timestamp: job.data.record.time_start,
+        topic: 'New CDR',
+        api_key: this.configService.get('SEDRIC_API_KEY'),
+        metadata,
       });
+
+      await this.sedricService.uploadRecording(file, url);
+      await this.pbxQueue.add('delete_file', {
+        path: file,
+      });
+
+      this.logger.log(`Successfully download record and sent`, {
+        user_id,
+        prospect_id: job.data.record.call_to,
+        unit_id: this.configService.get('SEDRIC_UNIT_ID'),
+        recording_type: extension,
+        timestamp: job.data.record.time_start,
+        topic: 'New CDR',
+        api_key: this.configService.get('SEDRIC_API_KEY'),
+        uploadURL: url.url,
+        downloadURL: job.data.downloadUrl,
+      });
+    } catch (e) {
+      console.log(e);
+    }
   }
 
   @Process('download')
@@ -85,19 +110,43 @@ export class QueueProcessor {
         job.data.record.file,
       );
 
-      const extension = job.data.downloadUrl.split('.').pop();
+      const { user_id, metadata } = this.sedricService.parseUserId(
+        job.data.record.call_from,
+      );
+
+      const extension = job.data.downloadUrl
+        .split('.')
+        .pop()
+        .split('?')[0]
+        .slice(0, 3);
+
       const url = await this.sedricService.generateUploadUrl({
-        user_id: this.configService.get('SEDRIC_USER_ID'),
+        user_id,
         prospect_id: job.data.record.call_to,
         unit_id: this.configService.get('SEDRIC_UNIT_ID'),
         recording_type: extension,
         timestamp: job.data.record.time,
         topic: 'New CDR',
         api_key: this.configService.get('SEDRIC_API_KEY'),
+        metadata,
       });
 
       await this.sedricService.uploadRecording(file, url);
-      await handleFileCleanup(file);
+      await this.pbxQueue.add('delete_file', {
+        path: file,
+      });
+
+      this.logger.log(`Successfully download record and sent`, {
+        user_id,
+        prospect_id: job.data.record.call_to,
+        unit_id: this.configService.get('SEDRIC_UNIT_ID'),
+        recording_type: extension,
+        timestamp: job.data.record.time,
+        topic: 'New CDR',
+        api_key: this.configService.get('SEDRIC_API_KEY'),
+        uploadURL: url.url,
+        downloadURL: job.data.downloadUrl,
+      });
     } catch (e) {
       console.log(e);
     }
@@ -126,7 +175,7 @@ export class QueueProcessor {
             downloadUrl,
           });
         })
-        .catch((err) => {
+        .catch(async (err) => {
           this.logger.error(`Download URL was refused: ${err.message}`);
         });
     }
@@ -159,8 +208,8 @@ export class QueueProcessor {
             downloadUrl,
           });
         })
-        .catch((err) => {
-          this.logger.error(`Download URL was refused: ${err.message}`);
+        .catch(async (err) => {
+          this.logger.error(`Download URL was refused PBX: ${err.message}`);
         });
     }
   }

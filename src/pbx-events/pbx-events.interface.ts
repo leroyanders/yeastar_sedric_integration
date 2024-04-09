@@ -20,3 +20,14 @@ export interface IInnerMessage {
   did_number: string;
   agent_ring_time: number;
 }
+
+export interface TErrorResponse {
+  errcode: number;
+  errmsg: string;
+  invalid_param_list: TInvalidParam[];
+}
+
+interface TInvalidParam {
+  value: string;
+  validation_type: string;
+}
