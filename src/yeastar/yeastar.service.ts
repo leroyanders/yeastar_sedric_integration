@@ -7,6 +7,7 @@ import {
   IApiTokenResponse,
   IApiRecordDownloadResponse,
   IApiRecordsListResponse,
+  ApiDownloadRecordingUrlResponse,
 } from './yeastar.interface';
 import axios, { AxiosResponse } from 'axios';
 import { PbxEventsGateway } from '../pbx-events/pbx-events.gateway';
@@ -21,6 +22,7 @@ export class YeastarService {
   private accessToken: string = null;
   private refreshToken: string = null;
   private expireTime: number = null;
+  private apiPath: string = 'openapi/v1.0';
 
   constructor(
     private httpService: HttpService,
@@ -95,7 +97,7 @@ export class YeastarService {
   }
 
   async getAccessToken(username: string, password: string) {
-    const apiUrl = `${this.configService.get('YEASTAR_API_URL')}/get_token`;
+    const apiUrl = `${this.configService.get('YEASTAR_API_URL')}/${this.apiPath}/get_token`;
 
     const config = {
       method: 'post',
@@ -129,7 +131,7 @@ export class YeastarService {
 
     const username = this.configService.get('YEASTAR_API_USERNAME');
     const password = this.configService.get('YEASTAR_API_PASSWORD');
-    const apiUrl = `${this.configService.get('YEASTAR_API_URL')}/refresh_token`;
+    const apiUrl = `${this.configService.get('YEASTAR_API_URL')}/${this.apiPath}/refresh_token`;
     const headers = {
       'Content-Type': 'application/json',
       'User-Agent': 'OpenAPI',
@@ -180,7 +182,7 @@ export class YeastarService {
     });
 
     const apiUrl = this.configService.get('YEASTAR_API_URL');
-    const url = `${apiUrl}/recording/list?${params.toString()}`;
+    const url = `${apiUrl}/${this.apiPath}/recording/list?${params.toString()}`;
 
     try {
       return await firstValueFrom(
@@ -207,21 +209,26 @@ export class YeastarService {
   async getRecordingDownloadUrl(
     accessToken: string,
     recordingId: number,
-  ): Promise<string> {
+  ): Promise<ApiDownloadRecordingUrlResponse> {
     const params = new URLSearchParams({
       access_token: accessToken,
       id: recordingId.toString(),
     });
 
     const apiUrl = this.configService.get('YEASTAR_API_URL');
-    const url = `${apiUrl}/recording/download?${params.toString()}`;
+    const url = `${apiUrl}/${this.apiPath}/recording/download?${params.toString()}`;
 
     try {
       return await firstValueFrom(
         this.httpService.get<IApiRecordDownloadResponse>(url).pipe(
           map((response) => {
             if (response.data.errcode === 0) {
-              return `${apiUrl}/${response.data.download_resource_url}?access_token=${accessToken}`;
+              return {
+                errcode: response.data.errmsg,
+                errmsg: response.data.errmsg,
+                file: response.data.file,
+                download_resource_url: `${apiUrl}${response.data.download_resource_url}?access_token=${accessToken}`,
+              };
             } else {
               throw new Error(response.data.errmsg);
             }
@@ -236,16 +243,9 @@ export class YeastarService {
     }
   }
 
-  async downloadRecording(
-    accessToken: string,
-    downloadUrl: string,
-    savePath: string,
-  ) {
-    const apiUrl = this.configService.get('YEASTAR_API_URL');
-    const url = `${apiUrl}${downloadUrl}?access_token=${accessToken}`;
-
+  async downloadRecording(downloadUrl: ApiDownloadRecordingUrlResponse) {
     // Assuming downloadPath constructs the full path including 'downloads' folder
-    const fullPath = downloadPath(savePath);
+    const fullPath = downloadPath(downloadUrl.file);
 
     // Ensure the directory part of fullPath exists
     const directory = dirname(fullPath);
@@ -256,7 +256,7 @@ export class YeastarService {
     }
 
     await new Promise((resolve, reject) => {
-      const request = get(url, (response) => {
+      const request = get(downloadUrl.download_resource_url, (response) => {
         if (response.statusCode !== 200) {
           return reject(
             new Error(

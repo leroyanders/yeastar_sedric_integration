@@ -32,3 +32,10 @@ export interface ICallRecord {
   call_type: string;
   file: string;
 }
+
+export interface ApiDownloadRecordingUrlResponse {
+  errcode: string;
+  errmsg: string;
+  file: string;
+  download_resource_url: string;
+}

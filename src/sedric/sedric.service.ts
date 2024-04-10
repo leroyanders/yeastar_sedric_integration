@@ -26,8 +26,8 @@ export class SedricService {
     const { userId, extension } = match.groups;
 
     return {
-      user_id: userId,
-      metadata: { extension: `<${extension}>` },
+      user_id: userId.trim(), // Trim to remove any leading/trailing whitespace
+      metadata: { extension: extension.trim() }, // No need for angle brackets around extension
     };
   }
 

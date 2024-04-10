@@ -3,7 +3,10 @@ import { Logger } from '@nestjs/common';
 import { Job, Queue } from 'bull';
 import { YeastarService } from '../yeastar/yeastar.service';
 import { SedricService } from '../sedric/sedric.service';
-import { ICallRecord } from '../yeastar/yeastar.interface';
+import {
+  ApiDownloadRecordingUrlResponse,
+  ICallRecord,
+} from '../yeastar/yeastar.interface';
 import { checkFileExists, handleFileCleanup } from '../utils/file-system';
 import { ConfigService } from '@nestjs/config';
 import { IInnerMessage } from '../pbx-events/pbx-events.interface';
@@ -37,31 +40,24 @@ export class QueueProcessor {
     job: Job<{
       record: IInnerMessage;
       accessToken: string;
-      downloadUrl: string;
+      downloadUrl: ApiDownloadRecordingUrlResponse;
     }>,
   ) {
     this.logger.debug(
-      `Downloading record from: ${job.data.downloadUrl}`,
+      `Downloading PBX record from: ${job.data.downloadUrl.download_resource_url}`,
       job.data.record.call_id,
     );
 
     try {
       const file = await this.yeastarService.downloadRecording(
-        job.data.accessToken,
         job.data.downloadUrl,
-        job.data.record.recording,
       );
 
       const { user_id, metadata } = this.sedricService.parseUserId(
         job.data.record.call_from,
       );
 
-      const extension = job.data.downloadUrl
-        .split('.')
-        .pop()
-        .split('?')[0]
-        .slice(0, 3);
-
+      const extension = job.data.downloadUrl.file.split('.').pop().slice(0, 3);
       const url = await this.sedricService.generateUploadUrl({
         user_id,
         prospect_id: job.data.record.call_to,
@@ -78,7 +74,7 @@ export class QueueProcessor {
         path: file,
       });
 
-      this.logger.log(`Successfully download record and sent`, {
+      this.logger.log(`Successfully download record PBX and sent`, {
         user_id,
         prospect_id: job.data.record.call_to,
         unit_id: this.configService.get('SEDRIC_UNIT_ID'),
@@ -88,6 +84,8 @@ export class QueueProcessor {
         api_key: this.configService.get('SEDRIC_API_KEY'),
         uploadURL: url.url,
         downloadURL: job.data.downloadUrl,
+        metadata,
+        record: job.data.record,
       });
     } catch (e) {
       console.log(e);
@@ -96,30 +94,27 @@ export class QueueProcessor {
 
   @Process('download')
   async handleDownload(
-    job: Job<{ record: ICallRecord; accessToken: string; downloadUrl: string }>,
+    job: Job<{
+      record: ICallRecord;
+      accessToken: string;
+      downloadUrl: ApiDownloadRecordingUrlResponse;
+    }>,
   ) {
     this.logger.debug(
-      `Downloading record from: ${job.data.downloadUrl}`,
+      `Downloading record from: ${job.data.downloadUrl.download_resource_url}`,
       job.data.record.id,
     );
 
     try {
       const file = await this.yeastarService.downloadRecording(
-        job.data.accessToken,
         job.data.downloadUrl,
-        job.data.record.file,
       );
 
       const { user_id, metadata } = this.sedricService.parseUserId(
         job.data.record.call_from,
       );
 
-      const extension = job.data.downloadUrl
-        .split('.')
-        .pop()
-        .split('?')[0]
-        .slice(0, 3);
-
+      const extension = job.data.downloadUrl.file.split('.').pop().slice(0, 3);
       const url = await this.sedricService.generateUploadUrl({
         user_id,
         prospect_id: job.data.record.call_to,
@@ -146,6 +141,8 @@ export class QueueProcessor {
         api_key: this.configService.get('SEDRIC_API_KEY'),
         uploadURL: url.url,
         downloadURL: job.data.downloadUrl,
+        metadata,
+        record: job.data.record,
       });
     } catch (e) {
       console.log(e);
@@ -167,7 +164,7 @@ export class QueueProcessor {
       // 7. Get record's download URL
       this.yeastarService
         .getRecordingDownloadUrl(job.data.accessToken, job.data.record.id)
-        .then(async (downloadUrl) => {
+        .then(async (downloadUrl: ApiDownloadRecordingUrlResponse) => {
           // 8. Download record
           await this.pbxQueue.add('download', {
             record: job.data.record,

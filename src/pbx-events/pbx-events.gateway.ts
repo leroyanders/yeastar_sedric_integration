@@ -15,8 +15,10 @@ import WebSocket from 'ws';
 @WebSocketGateway()
 export class PbxEventsGateway {
   private readonly logger = new Logger(PbxEventsGateway.name);
-  private pbxBaseUrl = this.configService.get('PBX_WEBSOCKET_URL');
+  private pbxBaseUrl = this.configService.get('YEASTAR_API_URL');
   private reconnectInterval: number = 5000;
+  private messageQueue: any[] = [];
+  private isReconnecting = false;
 
   constructor(
     private configService: ConfigService,
@@ -28,6 +30,75 @@ export class PbxEventsGateway {
 
   async initialize(authData: IApiTokenResponse) {
     this.connectToWebSocket(authData);
+  }
+
+  private async reconnectAndSend(data: IApiTokenResponse) {
+    let attempts = 0;
+    const maxAttempts = 5;
+
+    // Function to wait for a specified amount of time
+    const delay = (ms: number) =>
+      new Promise((resolve) => setTimeout(resolve, ms));
+
+    while (!this.isReconnecting && attempts < maxAttempts) {
+      this.isReconnecting = true;
+      this.logger.error(
+        `Attempting to reconnect WebSocket... Attempt ${attempts + 1}/${maxAttempts}`,
+      );
+
+      try {
+        // Reconnect logic
+        this.connectToWebSocket(data);
+
+        // If the connection is successful, break the loop
+        if (this.client.readyState === WebSocket.OPEN) {
+          this.logger.log('WebSocket reconnected successfully.');
+
+          // Dequeue and send all queued messages
+          while (this.messageQueue.length > 0) {
+            const message = this.messageQueue.shift();
+            await this.sendMessage(message, data);
+          }
+
+          break; // Exit the loop after successful reconnection
+        }
+      } catch (error) {
+        this.logger.error('Reconnection attempt failed.', error);
+      } finally {
+        this.isReconnecting = false;
+      }
+
+      attempts++;
+      if (attempts < maxAttempts) {
+        await delay(180000); // 3 minutes in milliseconds
+      }
+    }
+
+    if (attempts >= maxAttempts) {
+      this.logger.error(
+        'Max reconnection attempts reached. Unable to reconnect WebSocket.',
+      );
+    }
+  }
+
+  private async sendMessage(data: any, authData: IApiTokenResponse) {
+    if (this.client.readyState === WebSocket.OPEN) {
+      if (typeof data === 'string') {
+        this.client.send(data);
+      } else {
+        this.client.send(JSON.stringify(data));
+      }
+    } else {
+      this.logger.error(
+        'Cannot send message: WebSocket is not open. Queuing message.',
+      );
+
+      // Add the message to the queue
+      this.messageQueue.push(data);
+
+      // Attempt to reconnect and then resend messages
+      await this.reconnectAndSend(authData);
+    }
   }
 
   private connectToWebSocket(authData: IApiTokenResponse) {
@@ -42,42 +113,47 @@ export class PbxEventsGateway {
     this.logger.debug('Attempting to connect to PBX WebSocket...');
     this.logger.debug(`Provided token to PBX: ${authData.access_token}`);
 
-    const sendMessage = (data: any) => {
-      if (typeof data === 'string') {
-        this.client.send(data);
-      } else {
-        this.client.send(JSON.stringify(data));
-      }
-    };
-
     this.client = new WebSocket(wsUrl, {
       rejectUnauthorized: false,
     });
 
-    registerEmitter('open', () => {
-      sendMessage({ topic_list: [30012] });
+    registerEmitter('open', async () => {
+      await this.sendMessage({ topic_list: [30012] }, authData);
 
       // Send heartbeat every 50 seconds
-      setInterval(() => {
-        sendMessage('heartbeat');
+      setInterval(async () => {
+        await this.sendMessage('heartbeat', authData);
       }, 50000);
 
       // Listen for messages
-      registerEmitter('message', async (data: string) => {
-        this.logger.debug('Received message:', data);
+      registerEmitter('message', async (data: string | object) => {
+        this.logger.debug('Received message:', data, typeof data);
 
-        if (data !== 'heartbeat response' && typeof data === 'object') {
-          const json = (data as IOuterMessage) || (data as TErrorResponse);
+        // Ensure data is neither null nor a heartbeat response
+        if (
+          data !== 'heartbeat response' &&
+          data !== null &&
+          typeof data === 'object'
+        ) {
+          let json: IOuterMessage | TErrorResponse;
 
-          if ('errcode' in json) {
-            this.logger.error(json);
-          }
+          // Safely handle data assuming it's an object
+          if ('errcode' in data) {
+            json = data as TErrorResponse;
+            this.logger.error('Error:', json);
+          } else if ('msg' in data) {
+            json = data as IOuterMessage;
 
-          if ('msg' in json) {
-            const record = json.msg;
+            let record: IInnerMessage;
+            try {
+              record =
+                typeof json.msg === 'string' ? JSON.parse(json.msg) : json.msg;
+            } catch (error) {
+              this.logger.error('Failed to parse json.msg:', json.msg);
+              return;
+            }
 
-            // Publish only received records nothing else
-            if ((record as unknown as IInnerMessage).type) {
+            if ('type' in record) {
               await this.pbxQueue.add('pbx_process', {
                 record: record,
                 accessToken: authData.access_token,
