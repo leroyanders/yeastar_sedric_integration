@@ -8,21 +8,19 @@ import {
 } from '../yeastar/yeastar.interface';
 import { Queue } from 'bull';
 import { Agent } from 'https';
-import { YeastarModule } from '../yeastar/yeastar.module';
 import { QueueModule } from '../queue/queue.module';
-import { YeastarGateway } from '../yeastar/yeastar.gateway';
+import { YeastarModule } from '../yeastar/yeastar.module';
 
 @Module({
   imports: [
     QueueModule,
+    YeastarModule,
     HttpModule.register({
       httpsAgent: new Agent({
         rejectUnauthorized: false,
       }),
     }),
-    YeastarModule,
   ],
-  providers: [YeastarService, YeastarGateway],
 })
 export class ScriptModule implements OnModuleInit {
   private readonly logger = new Logger(ScriptModule.name);

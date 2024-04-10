@@ -4,7 +4,6 @@ import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
 import { HttpModule } from '@nestjs/axios';
 import { Agent } from 'https';
-import { RedisModule } from '@nestjs-modules/ioredis';
 
 @Module({
   imports: [
@@ -16,10 +15,6 @@ import { RedisModule } from '@nestjs-modules/ioredis';
         host: 'localhost',
         port: 6379,
       },
-    }),
-    RedisModule.forRoot({
-      type: 'single',
-      url: '127.0.0.1:6379',
     }),
     HttpModule.register({
       httpsAgent: new Agent({

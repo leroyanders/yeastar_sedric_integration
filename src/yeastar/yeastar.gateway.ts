@@ -3,13 +3,13 @@ import { Server } from 'socket.io';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
-import { Logger } from '@nestjs/common';
+import { forwardRef, Inject, Logger } from '@nestjs/common';
 import {
   IInnerMessage,
   IOuterMessage,
   TErrorResponse,
-  IApiTokenResponse,
 } from './yeastar.interface';
+import { YeastarService } from './yeastar.service';
 import WebSocket from 'ws';
 
 @WebSocketGateway()
@@ -21,13 +21,19 @@ export class YeastarGateway {
   constructor(
     private configService: ConfigService,
     @InjectQueue('pbx') private readonly pbxQueue: Queue,
+
+    @Inject(forwardRef(() => YeastarService))
+    private yeastarService: YeastarService,
   ) {}
 
   @WebSocketServer() server: Server;
   private client: WebSocket = null;
 
-  async initialize(authData: IApiTokenResponse) {
-    this.connectToWebSocket(authData);
+  async initialize() {
+    this.connectToWebSocket();
+    this.logger.debug(
+      `Connecting to Yeastar Gateway server with token: ${this.yeastarService.getStaticAccessToken()}`,
+    );
   }
 
   private async sendMessage(data: any) {
@@ -63,8 +69,9 @@ export class YeastarGateway {
     this.logger.debug('PBX WebSocket gateway shut down successfully.');
   }
 
-  private connectToWebSocket(authData: IApiTokenResponse) {
-    const wsUrl = `${this.pbxBaseUrl}/openapi/v1.0/subscribe?access_token=${authData.access_token}`;
+  private connectToWebSocket() {
+    const accessToken = this.yeastarService.getStaticAccessToken();
+    const wsUrl = `${this.pbxBaseUrl}/openapi/v1.0/subscribe?access_token=${accessToken}`;
 
     const registerEmitter = (event: string, cb: (data: any) => void) => {
       this.client.on(event, (data: any) => {
@@ -73,7 +80,9 @@ export class YeastarGateway {
     };
 
     this.logger.debug('Attempting to connect to PBX WebSocket...');
-    this.logger.debug(`Provided token to PBX: ${authData.access_token}`);
+    this.logger.debug(
+      `Provided token to PBX: ${this.yeastarService.getStaticAccessToken()}`,
+    );
 
     this.client = new WebSocket(wsUrl, {
       rejectUnauthorized: false,

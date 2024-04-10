@@ -14,8 +14,6 @@ import { YeastarGateway } from './yeastar.gateway';
 import { createWriteStream, mkdirSync, existsSync } from 'fs';
 import { downloadPath } from '../utils/fs';
 import { dirname } from 'path';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import Redis from 'ioredis';
 
 @Injectable()
 export class YeastarService {
@@ -30,9 +28,11 @@ export class YeastarService {
     private httpService: HttpService,
     private configService: ConfigService,
     private pbxGateway: YeastarGateway,
-
-    @InjectRedis() private readonly redis: Redis,
   ) {}
+
+  getStaticAccessToken() {
+    return this.accessToken;
+  }
 
   async initialize() {
     const username = this.configService.get('YEASTAR_API_USERNAME');
@@ -49,7 +49,7 @@ export class YeastarService {
               }
 
               this.updateTokensAndScheduleNextRefresh(data);
-              this.initializeWebSocketGateway(data);
+              this.initializeWebSocketGateway();
 
               resolve(data);
             })
@@ -62,10 +62,6 @@ export class YeastarService {
       }
     }
 
-    await this.redis.set('accessToken', this.accessToken);
-    await this.redis.set('refreshToken', this.refreshToken);
-    await this.redis.set('expireTime', this.expireTime);
-
     return {
       accessToken: this.accessToken,
       refreshToken: this.refreshToken,
@@ -73,8 +69,8 @@ export class YeastarService {
     };
   }
 
-  async initializeWebSocketGateway(data: IApiTokenResponse) {
-    await this.pbxGateway.initialize(data);
+  async initializeWebSocketGateway() {
+    await this.pbxGateway.initialize();
   }
 
   async updateTokensAndScheduleNextRefresh(authData: IApiTokenResponse) {
@@ -82,21 +78,14 @@ export class YeastarService {
     this.refreshToken = authData.refresh_token;
     this.expireTime = authData.access_token_expire_time * 1000;
 
-    await this.redis.set('accessToken', authData.access_token);
-    await this.redis.set('refreshToken', authData.refresh_token);
-    await this.redis.set(
-      'expireTime',
-      authData.access_token_expire_time * 1000,
-    );
-
     // Schedule the next refresh slightly before the current token expires
     const refreshInterval = authData.access_token_expire_time * 1000;
-
     this.logger.debug(`Token will be refreshed in: ${refreshInterval}`);
+
     setTimeout(async () => {
       await this.refreshTokenCycle();
       await this.pbxGateway.shutdown();
-      await this.initializeWebSocketGateway(authData);
+      await this.initializeWebSocketGateway();
     }, refreshInterval);
 
     return authData;
@@ -106,14 +95,11 @@ export class YeastarService {
     const refreshData: IApiTokenResponse = await this.refreshAccessToken(
       this.refreshToken,
     );
-
-    this.logger.debug('Token was refreshed');
     await this.updateTokensAndScheduleNextRefresh(refreshData);
   }
 
   async getAccessToken(username: string, password: string) {
     const apiUrl = `${this.configService.get('YEASTAR_API_URL')}/${this.apiPath}/get_token`;
-
     const config = {
       method: 'post',
       url: apiUrl,
@@ -188,7 +174,7 @@ export class YeastarService {
     orderBy?: string,
   ): Promise<IApiRecordsListResponse> {
     const params = new URLSearchParams({
-      access_token: await this.redis.get('accessToken'),
+      access_token: this.accessToken,
       ...(page && { page: page.toString() }),
       ...(pageSize && { page_size: pageSize.toString() }),
       ...(sortBy && { sort_by: sortBy }),
@@ -224,7 +210,7 @@ export class YeastarService {
     recordingId: number,
   ): Promise<ApiDownloadRecordingUrlResponse> {
     const params = new URLSearchParams({
-      access_token: await this.redis.get('accessToken'),
+      access_token: this.accessToken,
       id: recordingId.toString(),
     });
 
@@ -240,7 +226,7 @@ export class YeastarService {
                 errcode: response.data.errmsg,
                 errmsg: response.data.errmsg,
                 file: response.data.file,
-                download_resource_url: `${apiUrl}${response.data.download_resource_url}?access_token=${await this.redis.get('accessToken')}`,
+                download_resource_url: `${apiUrl}${response.data.download_resource_url}?access_token=${this.accessToken}`,
               };
             } else {
               throw new Error(response.data.errmsg);

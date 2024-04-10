@@ -4,9 +4,8 @@ import { QueueProcessor } from './queue.processor';
 import { HttpModule } from '@nestjs/axios';
 import { Agent } from 'https';
 import { Queue } from 'bull';
-import { YeastarService } from '../yeastar/yeastar.service';
 import { SedricService } from '../sedric/sedric.service';
-import { YeastarGateway } from '../yeastar/yeastar.gateway';
+import { YeastarModule } from '../yeastar/yeastar.module';
 
 @Module({
   imports: [
@@ -18,8 +17,9 @@ import { YeastarGateway } from '../yeastar/yeastar.gateway';
         rejectUnauthorized: false,
       }),
     }),
+    YeastarModule,
   ],
-  providers: [QueueProcessor, YeastarService, SedricService, YeastarGateway],
+  providers: [QueueProcessor, SedricService],
   exports: [BullModule],
 })
 export class QueueModule implements OnModuleInit {
