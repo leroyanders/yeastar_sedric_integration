@@ -89,20 +89,18 @@ export class YeastarGateway {
 
       // Listen for messages
       registerEmitter('message', async (data: string | null) => {
-        if (data === null) return;
-        if (data === 'heartbeat response') return;
+        if (data == null) return;
+        if (data == 'heartbeat response') return;
 
         try {
           const json: IOuterMessage | TErrorResponse = JSON.parse(data);
 
-          if ('errcode' in json && json.errcode === 0) {
-            this.logger.log('Success:', json.errmsg);
-          } else if ('errcode' in json) {
+          if ('errcode' in json && json.errcode !== 0) {
             this.logger.error('Error:', json);
           } else if ('msg' in json) {
             const message: IOuterMessage = json as IOuterMessage;
-
             let record: IInnerMessage;
+
             try {
               record =
                 typeof message.msg === 'string'

@@ -14,6 +14,8 @@ import { YeastarGateway } from './yeastar.gateway';
 import { createWriteStream, mkdirSync, existsSync } from 'fs';
 import { downloadPath } from '../utils/fs';
 import { dirname } from 'path';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 
 @Injectable()
 export class YeastarService {
@@ -28,6 +30,8 @@ export class YeastarService {
     private httpService: HttpService,
     private configService: ConfigService,
     private pbxGateway: YeastarGateway,
+
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   async initialize() {
@@ -58,6 +62,10 @@ export class YeastarService {
       }
     }
 
+    await this.redis.set('accessToken', this.accessToken);
+    await this.redis.set('refreshToken', this.refreshToken);
+    await this.redis.set('expireTime', this.expireTime);
+
     return {
       accessToken: this.accessToken,
       refreshToken: this.refreshToken,
@@ -69,10 +77,17 @@ export class YeastarService {
     await this.pbxGateway.initialize(data);
   }
 
-  updateTokensAndScheduleNextRefresh(authData: IApiTokenResponse) {
+  async updateTokensAndScheduleNextRefresh(authData: IApiTokenResponse) {
     this.accessToken = authData.access_token;
     this.refreshToken = authData.refresh_token;
     this.expireTime = authData.access_token_expire_time * 1000;
+
+    await this.redis.set('accessToken', authData.access_token);
+    await this.redis.set('refreshToken', authData.refresh_token);
+    await this.redis.set(
+      'expireTime',
+      authData.access_token_expire_time * 1000,
+    );
 
     // Schedule the next refresh slightly before the current token expires
     const refreshInterval = authData.access_token_expire_time * 1000;
@@ -93,8 +108,7 @@ export class YeastarService {
     );
 
     this.logger.debug('Token was refreshed');
-    console.log(refreshData);
-    this.updateTokensAndScheduleNextRefresh(refreshData);
+    await this.updateTokensAndScheduleNextRefresh(refreshData);
   }
 
   async getAccessToken(username: string, password: string) {
@@ -174,7 +188,7 @@ export class YeastarService {
     orderBy?: string,
   ): Promise<IApiRecordsListResponse> {
     const params = new URLSearchParams({
-      access_token: this.accessToken,
+      access_token: await this.redis.get('accessToken'),
       ...(page && { page: page.toString() }),
       ...(pageSize && { page_size: pageSize.toString() }),
       ...(sortBy && { sort_by: sortBy }),
@@ -210,7 +224,7 @@ export class YeastarService {
     recordingId: number,
   ): Promise<ApiDownloadRecordingUrlResponse> {
     const params = new URLSearchParams({
-      access_token: this.accessToken,
+      access_token: await this.redis.get('accessToken'),
       id: recordingId.toString(),
     });
 
@@ -220,13 +234,13 @@ export class YeastarService {
     try {
       return await firstValueFrom(
         this.httpService.get<IApiRecordDownloadResponse>(url).pipe(
-          map((response) => {
+          map(async (response) => {
             if (response.data.errcode === 0) {
               return {
                 errcode: response.data.errmsg,
                 errmsg: response.data.errmsg,
                 file: response.data.file,
-                download_resource_url: `${apiUrl}${response.data.download_resource_url}?access_token=${this.accessToken}`,
+                download_resource_url: `${apiUrl}${response.data.download_resource_url}?access_token=${await this.redis.get('accessToken')}`,
               };
             } else {
               throw new Error(response.data.errmsg);
