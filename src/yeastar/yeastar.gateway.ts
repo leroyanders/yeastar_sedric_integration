@@ -90,9 +90,7 @@ export class YeastarGateway {
       // Listen for messages
       registerEmitter('message', async (data: string | null) => {
         if (data === null) return;
-        if (data === 'heartbeat response') {
-          return this.logger.debug('Heartbeat received');
-        }
+        if (data === 'heartbeat response') return;
 
         try {
           const json: IOuterMessage | TErrorResponse = JSON.parse(data);
