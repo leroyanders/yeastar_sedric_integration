@@ -1,14 +1,12 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { HttpModule } from '@nestjs/axios';
-import { BullModule } from '@nestjs/bull';
-import { QueueModule } from './queue/queue.module';
 import { ScriptModule } from './script/script.module';
-import { ScheduleModule } from '@nestjs/schedule';
+import { ConfigModule } from '@nestjs/config';
+import { BullModule } from '@nestjs/bull';
+import { HttpModule } from '@nestjs/axios';
+import { Agent } from 'https';
 
 @Module({
   imports: [
-    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -18,10 +16,12 @@ import { ScheduleModule } from '@nestjs/schedule';
         port: 6379,
       },
     }),
+    HttpModule.register({
+      httpsAgent: new Agent({
+        rejectUnauthorized: false,
+      }),
+    }),
     ScriptModule,
-    QueueModule,
-    HttpModule,
   ],
-  providers: [],
 })
 export class AppModule {}

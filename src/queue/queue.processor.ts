@@ -7,9 +7,9 @@ import {
   ApiDownloadRecordingUrlResponse,
   ICallRecord,
 } from '../yeastar/yeastar.interface';
-import { checkFileExists, handleFileCleanup } from '../utils/file-system';
+import { checkFileExists, handleFileCleanup } from '../utils/fs';
 import { ConfigService } from '@nestjs/config';
-import { IInnerMessage } from '../pbx-events/pbx-events.interface';
+import { IInnerMessage } from '../yeastar/yeastar.interface';
 
 @Processor('pbx')
 export class QueueProcessor {
@@ -28,18 +28,19 @@ export class QueueProcessor {
       path: string;
     }>,
   ) {
-    try {
-      await handleFileCleanup(job.data.path);
-    } catch (error) {
-      this.logger.error('Unable to delete file', error);
-    }
+    handleFileCleanup(job.data.path)
+      .then(() => {
+        this.logger.debug('File was deleted:', job.data.path);
+      })
+      .catch((error) => {
+        this.logger.error('Unable to delete file', error);
+      });
   }
 
   @Process('pbx_download')
   async handlePBXDownload(
     job: Job<{
       record: IInnerMessage;
-      accessToken: string;
       downloadUrl: ApiDownloadRecordingUrlResponse;
     }>,
   ) {
@@ -53,20 +54,16 @@ export class QueueProcessor {
         job.data.downloadUrl,
       );
 
-      const { user_id, metadata } = this.sedricService.parseUserId(
-        job.data.record.call_from,
-      );
-
       const extension = job.data.downloadUrl.file.split('.').pop().slice(0, 3);
       const url = await this.sedricService.generateUploadUrl({
-        user_id,
+        user_id: job.data.record.call_from,
         prospect_id: job.data.record.call_to,
         unit_id: this.configService.get('SEDRIC_UNIT_ID'),
         recording_type: extension,
         timestamp: job.data.record.time_start,
         topic: 'New CDR',
         api_key: this.configService.get('SEDRIC_API_KEY'),
-        metadata,
+        metadata: { extension: job.data.record.call_from },
       });
 
       await this.sedricService.uploadRecording(file, url);
@@ -75,7 +72,7 @@ export class QueueProcessor {
       });
 
       this.logger.log(`Successfully download record PBX and sent`, {
-        user_id,
+        user_id: job.data.record.call_from,
         prospect_id: job.data.record.call_to,
         unit_id: this.configService.get('SEDRIC_UNIT_ID'),
         recording_type: extension,
@@ -84,7 +81,7 @@ export class QueueProcessor {
         api_key: this.configService.get('SEDRIC_API_KEY'),
         uploadURL: url.url,
         downloadURL: job.data.downloadUrl,
-        metadata,
+        metadata: { extension: job.data.record.call_from },
         record: job.data.record,
       });
     } catch (e) {
@@ -96,7 +93,6 @@ export class QueueProcessor {
   async handleDownload(
     job: Job<{
       record: ICallRecord;
-      accessToken: string;
       downloadUrl: ApiDownloadRecordingUrlResponse;
     }>,
   ) {
@@ -150,7 +146,7 @@ export class QueueProcessor {
   }
 
   @Process('process')
-  async handleProcess(job: Job<{ record: ICallRecord; accessToken: string }>) {
+  async handleProcess(job: Job<{ record: ICallRecord }>) {
     this.logger.debug(
       'Check for exciting record locally...',
       job.data.record.id,
@@ -163,12 +159,11 @@ export class QueueProcessor {
 
       // 7. Get record's download URL
       this.yeastarService
-        .getRecordingDownloadUrl(job.data.accessToken, job.data.record.id)
+        .getRecordingDownloadUrl(job.data.record.id)
         .then(async (downloadUrl: ApiDownloadRecordingUrlResponse) => {
           // 8. Download record
           await this.pbxQueue.add('download', {
             record: job.data.record,
-            accessToken: job.data.accessToken,
             downloadUrl,
           });
         })
@@ -179,9 +174,7 @@ export class QueueProcessor {
   }
 
   @Process('pbx_process')
-  async handlePBXProcess(
-    job: Job<{ record: IInnerMessage; accessToken: string }>,
-  ) {
+  async handlePBXProcess(job: Job<{ record: IInnerMessage }>) {
     this.logger.debug(
       `PBX: Check for exciting record locally...: ${job.data.record.call_id}`,
     );
@@ -193,15 +186,11 @@ export class QueueProcessor {
 
       // 7. Get record's download URL
       this.yeastarService
-        .getRecordingDownloadUrl(
-          job.data.accessToken,
-          Number(job.data.record.call_id),
-        )
+        .getRecordingDownloadUrl(Number(job.data.record.call_id))
         .then(async (downloadUrl) => {
           // 8. Download record
           await this.pbxQueue.add('pbx_download', {
             record: job.data.record,
-            accessToken: job.data.accessToken,
             downloadUrl,
           });
         })

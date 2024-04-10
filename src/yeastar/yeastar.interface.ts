@@ -1,10 +1,10 @@
 export interface IApiTokenResponse {
-  errcode: number; // Returned error code. 0: Succeed. Non-zero value: Failed.
-  errmsg: 'SUCCESS' | 'FAILURE'; // Returned message. 'SUCCESS': Succeed. 'FAILURE': Failed.
-  access_token_expire_time: number; // Access token expire time in seconds.
-  access_token: string; // Credential of calling API interfaces. Required for all API requests.
-  refresh_token_expire_time: number; // Refresh token expire time in seconds.
-  refresh_token: string; // Refresh token used to obtain new access_token and refresh_token.
+  errcode: number;
+  errmsg: 'SUCCESS' | 'FAILURE';
+  access_token_expire_time: number;
+  access_token: string;
+  refresh_token_expire_time: number;
+  refresh_token: string;
 }
 
 export interface IApiRecordsListResponse {
@@ -38,4 +38,38 @@ export interface ApiDownloadRecordingUrlResponse {
   errmsg: string;
   file: string;
   download_resource_url: string;
+}
+
+export interface IOuterMessage {
+  type: number;
+  sn: string;
+  msg: string;
+}
+
+export interface IInnerMessage {
+  call_id: string;
+  time_start: string;
+  call_from: string;
+  call_to: string;
+  call_duration: number;
+  talk_duration: number;
+  src_trunk_name: string;
+  dst_trunk_name: string;
+  pin_code: string;
+  status: string;
+  type: string;
+  recording: string;
+  did_number: string;
+  agent_ring_time: number;
+}
+
+export interface TErrorResponse {
+  errcode: number;
+  errmsg: string;
+  invalid_param_list: TInvalidParam[];
+}
+
+interface TInvalidParam {
+  value: string;
+  validation_type: string;
 }

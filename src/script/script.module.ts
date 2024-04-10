@@ -1,29 +1,28 @@
 import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { YeastarService } from '../yeastar/yeastar.service';
 import { HttpModule } from '@nestjs/axios';
-import { PbxEventsGateway } from '../pbx-events/pbx-events.gateway';
-import { BullModule, InjectQueue } from '@nestjs/bull';
+import { InjectQueue } from '@nestjs/bull';
 import {
   IApiRecordsListResponse,
   ICallRecord,
 } from '../yeastar/yeastar.interface';
 import { Queue } from 'bull';
 import { Agent } from 'https';
-import { PbxEventsModule } from '../pbx-events/pbx-events.module';
+import { YeastarModule } from '../yeastar/yeastar.module';
+import { QueueModule } from '../queue/queue.module';
+import { YeastarGateway } from '../yeastar/yeastar.gateway';
 
 @Module({
   imports: [
+    QueueModule,
     HttpModule.register({
       httpsAgent: new Agent({
         rejectUnauthorized: false,
       }),
     }),
-    BullModule.registerQueue({
-      name: 'pbx',
-    }),
-    PbxEventsModule,
+    YeastarModule,
   ],
-  providers: [YeastarService, PbxEventsGateway],
+  providers: [YeastarService, YeastarGateway],
 })
 export class ScriptModule implements OnModuleInit {
   private readonly logger = new Logger(ScriptModule.name);
@@ -46,14 +45,13 @@ export class ScriptModule implements OnModuleInit {
 
         // 3. Fetch records & save to array
         this.yeastarService
-          .fetchRecordingList(accessToken, this.page, this.pageSize)
+          .fetchRecordingList(this.page, this.pageSize)
           .then(async (recordingList: IApiRecordsListResponse) => {
             const { total_number } = recordingList;
 
             this.pagesCount = Math.ceil(total_number / this.pageSize);
             for (this.page; this.page <= this.pagesCount; this.page++) {
               const response = await this.yeastarService.fetchRecordingList(
-                accessToken,
                 this.page,
                 this.pageSize,
               );
@@ -66,7 +64,6 @@ export class ScriptModule implements OnModuleInit {
                 for (const record of this.recordsList) {
                   await this.pbxQueue.add('process', {
                     record,
-                    accessToken,
                   });
                 }
               }

@@ -10,10 +10,11 @@ import {
   ApiDownloadRecordingUrlResponse,
 } from './yeastar.interface';
 import axios, { AxiosResponse } from 'axios';
-import { PbxEventsGateway } from '../pbx-events/pbx-events.gateway';
+import { YeastarGateway } from './yeastar.gateway';
 import { createWriteStream, mkdirSync, existsSync } from 'fs';
-import { downloadPath } from '../utils/file-system';
+import { downloadPath } from '../utils/fs';
 import { dirname } from 'path';
+import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 
 @Injectable()
 export class YeastarService {
@@ -27,8 +28,12 @@ export class YeastarService {
   constructor(
     private httpService: HttpService,
     private configService: ConfigService,
-    private pbxGateway: PbxEventsGateway,
+    private pbxGateway: YeastarGateway,
   ) {}
+
+  getAccessTokenStatic() {
+    return this.accessToken;
+  }
 
   async initialize() {
     const username = this.configService.get('YEASTAR_API_USERNAME');
@@ -56,6 +61,10 @@ export class YeastarService {
       } catch (err) {
         throw new Error(err.message);
       }
+
+      this.accessToken = randomStringGenerator();
+
+      console.log(this.accessToken);
     }
 
     return {
@@ -72,14 +81,15 @@ export class YeastarService {
   updateTokensAndScheduleNextRefresh(authData: IApiTokenResponse) {
     this.accessToken = authData.access_token;
     this.refreshToken = authData.refresh_token;
-    this.expireTime = authData.access_token_expire_time * 100;
+    this.expireTime = authData.access_token_expire_time * 1000;
 
     // Schedule the next refresh slightly before the current token expires
-    const refreshInterval = authData.access_token_expire_time * 100;
+    const refreshInterval = authData.access_token_expire_time * 1000;
 
     this.logger.debug(`Token will be refreshed in: ${refreshInterval}`);
     setTimeout(async () => {
       await this.refreshTokenCycle();
+      await this.pbxGateway.shutdown();
       await this.initializeWebSocketGateway(authData);
     }, refreshInterval);
 
@@ -167,14 +177,13 @@ export class YeastarService {
   }
 
   async fetchRecordingList(
-    accessToken: string,
     page?: number,
     pageSize?: number,
     sortBy?: string,
     orderBy?: string,
   ): Promise<IApiRecordsListResponse> {
     const params = new URLSearchParams({
-      access_token: accessToken,
+      access_token: this.accessToken,
       ...(page && { page: page.toString() }),
       ...(pageSize && { page_size: pageSize.toString() }),
       ...(sortBy && { sort_by: sortBy }),
@@ -207,11 +216,10 @@ export class YeastarService {
   }
 
   async getRecordingDownloadUrl(
-    accessToken: string,
     recordingId: number,
   ): Promise<ApiDownloadRecordingUrlResponse> {
     const params = new URLSearchParams({
-      access_token: accessToken,
+      access_token: this.accessToken,
       id: recordingId.toString(),
     });
 
@@ -227,7 +235,7 @@ export class YeastarService {
                 errcode: response.data.errmsg,
                 errmsg: response.data.errmsg,
                 file: response.data.file,
-                download_resource_url: `${apiUrl}${response.data.download_resource_url}?access_token=${accessToken}`,
+                download_resource_url: `${apiUrl}${response.data.download_resource_url}?access_token=${this.accessToken}`,
               };
             } else {
               throw new Error(response.data.errmsg);

@@ -1,12 +1,12 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { BullModule, InjectQueue } from '@nestjs/bull';
 import { QueueProcessor } from './queue.processor';
-import { YeastarService } from '../yeastar/yeastar.service';
 import { HttpModule } from '@nestjs/axios';
-import { SedricService } from '../sedric/sedric.service';
 import { Agent } from 'https';
-import { PbxEventsGateway } from '../pbx-events/pbx-events.gateway';
 import { Queue } from 'bull';
+import { YeastarService } from '../yeastar/yeastar.service';
+import { SedricService } from '../sedric/sedric.service';
+import { YeastarGateway } from '../yeastar/yeastar.gateway';
 
 @Module({
   imports: [
@@ -19,7 +19,7 @@ import { Queue } from 'bull';
       }),
     }),
   ],
-  providers: [QueueProcessor, YeastarService, SedricService, PbxEventsGateway],
+  providers: [QueueProcessor, YeastarService, SedricService, YeastarGateway],
   exports: [BullModule],
 })
 export class QueueModule implements OnModuleInit {
