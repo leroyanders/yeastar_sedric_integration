@@ -30,10 +30,6 @@ export class YeastarService {
     private pbxGateway: YeastarGateway,
   ) {}
 
-  getAccessTokenStatic() {
-    return this.accessToken;
-  }
-
   async initialize() {
     const username = this.configService.get('YEASTAR_API_USERNAME');
     const password = this.configService.get('YEASTAR_API_PASSWORD');
