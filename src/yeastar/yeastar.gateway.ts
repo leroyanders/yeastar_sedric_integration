@@ -90,35 +90,37 @@ export class YeastarGateway {
       // Listen for messages
       registerEmitter('message', async (data: string | null) => {
         if (data === null) return;
-        if (data !== 'heartbeat response') {
-          try {
-            const json: IOuterMessage | TErrorResponse = JSON.parse(data);
+        if (data === 'heartbeat response') {
+          return this.logger.debug('Heartbeat received');
+        }
 
-            if ('errcode' in json) {
-              this.logger.error('Error:', json);
-            } else if ('msg' in json) {
-              const message: IOuterMessage = json as IOuterMessage;
+        try {
+          const json: IOuterMessage | TErrorResponse = JSON.parse(data);
 
-              let record: IInnerMessage;
-              try {
-                record =
-                  typeof message.msg === 'string'
-                    ? JSON.parse(message.msg)
-                    : message.msg;
-              } catch (error) {
-                this.logger.error('Failed to parse json.msg:', message.msg);
-                return;
-              }
+          if ('errcode' in json && json.errcode === 0) {
+            this.logger.log('Success:', json.errmsg);
+          } else if ('errcode' in json) {
+            this.logger.error('Error:', json);
+          } else if ('msg' in json) {
+            const message: IOuterMessage = json as IOuterMessage;
 
-              if ('type' in record) {
-                await this.pbxQueue.add('pbx_process', {
-                  record: record,
-                });
-              }
+            let record: IInnerMessage;
+            try {
+              record =
+                typeof message.msg === 'string'
+                  ? JSON.parse(message.msg)
+                  : message.msg;
+            } catch (error) {
+              this.logger.error('Failed to parse json.msg:', message.msg);
+              return;
             }
-          } catch (error) {
-            this.logger.error('Failed to parse JSON:', error);
+
+            if ('type' in record) {
+              await this.pbxQueue.add('pbx_process', { record: record });
+            }
           }
+        } catch (error) {
+          this.logger.error('Failed to parse JSON:', error);
         }
       });
     });
