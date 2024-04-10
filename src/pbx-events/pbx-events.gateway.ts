@@ -66,7 +66,6 @@ export class PbxEventsGateway {
 
           if ('errcode' in json) {
             this.logger.error(json);
-            return;
           }
 
           if ('msg' in json) {
