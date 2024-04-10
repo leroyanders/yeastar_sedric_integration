@@ -16,6 +16,7 @@ import WebSocket from 'ws';
 export class PbxEventsGateway {
   private readonly logger = new Logger(PbxEventsGateway.name);
   private pbxBaseUrl = this.configService.get('PBX_WEBSOCKET_URL');
+  private reconnectInterval: number = 5000;
 
   constructor(
     private configService: ConfigService,
@@ -26,6 +27,10 @@ export class PbxEventsGateway {
   private client: WebSocket = null;
 
   async initialize(authData: IApiTokenResponse) {
+    this.connectToWebSocket(authData);
+  }
+
+  private connectToWebSocket(authData: IApiTokenResponse) {
     const wsUrl = `${this.pbxBaseUrl}/openapi/v1.0/subscribe?access_token=${authData.access_token}`;
 
     const registerEmitter = (event: string, cb: (data: any) => void) => {
@@ -46,7 +51,7 @@ export class PbxEventsGateway {
     };
 
     this.client = new WebSocket(wsUrl, {
-      rejectUnauthorized: false, // Note: In production, you should use valid certificates
+      rejectUnauthorized: false,
     });
 
     registerEmitter('open', () => {
@@ -83,24 +88,19 @@ export class PbxEventsGateway {
       });
     });
 
-    // Check for timeout / disconnect / errors
-    registerEmitter('close', () => {
-      this.logger.error('Disconnected from PBX WebSocket');
-    });
+    const attemptReconnect = () => {
+      this.logger.error(
+        'Disconnected from PBX WebSocket, attempting to reconnect...',
+      );
+      setTimeout(
+        () => this.connectToWebSocket(authData),
+        this.reconnectInterval,
+      );
+    };
 
-    registerEmitter('connect_error', (error) => {
-      this.logger.error(error);
-      console.log(error);
-    });
-
-    registerEmitter('connect_timeout', (error) => {
-      this.logger.error(error);
-      console.log(error);
-    });
-
-    registerEmitter('error', (error) => {
-      this.logger.error(error);
-      console.log(error);
-    });
+    registerEmitter('close', attemptReconnect);
+    registerEmitter('connect_error', attemptReconnect);
+    registerEmitter('connect_timeout', attemptReconnect);
+    registerEmitter('error', attemptReconnect);
   }
 }
