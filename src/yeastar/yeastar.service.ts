@@ -14,7 +14,6 @@ import { YeastarGateway } from './yeastar.gateway';
 import { createWriteStream, mkdirSync, existsSync } from 'fs';
 import { downloadPath } from '../utils/fs';
 import { dirname } from 'path';
-import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 
 @Injectable()
 export class YeastarService {
@@ -61,10 +60,6 @@ export class YeastarService {
       } catch (err) {
         throw new Error(err.message);
       }
-
-      this.accessToken = randomStringGenerator();
-
-      console.log(this.accessToken);
     }
 
     return {
