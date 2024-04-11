@@ -6,7 +6,7 @@ export interface IUploadUrlResponse {
 
 export type ISedricTeam = {
   name: string;
-  members: string[];
+  members: number[];
 };
 
 interface UploadUrlHeaders {

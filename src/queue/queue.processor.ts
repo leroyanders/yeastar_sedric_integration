@@ -62,7 +62,7 @@ export class QueueProcessor {
       const url = await this.sedricService.generateUploadUrl({
         user_id,
         prospect_id: job.data.record.call_to,
-        unit_id: this.sedricService.findTeamByName(user_id),
+        unit_id: this.sedricService.findTeamByName(job.data.record.call_from),
         recording_type: extension,
         timestamp: job.data.record.time_start,
         topic: 'New CDR',
@@ -78,7 +78,7 @@ export class QueueProcessor {
       this.logger.log(`Successfully download record PBX and sent`, {
         user_id,
         prospect_id: job.data.record.call_to,
-        unit_id: this.sedricService.findTeamByName(user_id),
+        unit_id: this.sedricService.findTeamByName(job.data.record.call_from),
         recording_type: extension,
         timestamp: job.data.record.time_start,
         topic: 'New CDR',
@@ -118,7 +118,7 @@ export class QueueProcessor {
       const url = await this.sedricService.generateUploadUrl({
         user_id,
         prospect_id: job.data.record.call_to,
-        unit_id: this.sedricService.findTeamByName(user_id),
+        unit_id: this.sedricService.findTeamByName(job.data.record.call_from),
         recording_type: extension,
         timestamp: job.data.record.time,
         topic: 'New CDR',
@@ -134,7 +134,7 @@ export class QueueProcessor {
       this.logger.log(`Successfully download record and sent`, {
         user_id,
         prospect_id: job.data.record.call_to,
-        unit_id: this.sedricService.findTeamByName(user_id),
+        unit_id: this.sedricService.findTeamByName(job.data.record.call_from),
         recording_type: extension,
         timestamp: job.data.record.time,
         topic: 'New CDR',

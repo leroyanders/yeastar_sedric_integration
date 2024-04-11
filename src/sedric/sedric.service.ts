@@ -13,85 +13,40 @@ export class SedricService {
   private teams: ISedricTeam[] = [
     {
       name: 'team-1',
-      members: [
-        'Rabea Nijim',
-        'Wael Elias',
-        'Nizar Asaad',
-        'Ibrahim Ahmad',
-        'Muhammad Milhem',
-        'Yasser Morad',
-        'Michael Abawi',
-        'christian abi samra',
-        'john louis',
-        'basel riziq',
-        'Sandy Habib',
-        'Iyad Kriem',
-      ],
+      members: Array.from(
+        new Set([
+          202, 309, 312, 313, 314, 315, 316, 2041, 2038, 2035, 2037, 2064, 2034,
+          2033, 317, 318, 319, 214, 240, 2023, 2066, 2027, 2036, 2067,
+        ]),
+      ),
     },
     {
       name: 'team-2',
-      members: [
-        'Amal Dyab',
-        'Diaa Dasoky',
-        'Nimer Shahen',
-        'Qasem akry',
-        'Mtanes Nsere',
-        'Mohannad Salem',
-        'Bolous',
-        'ahmad nasser',
-        'Rafiq Helu',
-        'Ahmad Faour',
-        'jad rabeaa',
-        'Loai Swaaed',
-        'Lama Mansour',
-        'mohamad Abu liel',
-        'Abed Habashi',
-        'Ahmad Agbaria',
-        'Mohannad Saleh',
-        'Milad Sliman',
-        'Tofeq atiye',
-        'Tawfeek Armaly',
-        'mohamad kenaan',
-        'Sari Matar',
-        'Tojan salti',
-        'Mohammad Odeh',
-        'Remah Soliman',
-        'Layale Alwan',
-        'Tarek Zatme',
-        'Azez Knane',
-        'Donia abdullah',
-        'mahmod abu ahmad',
-      ],
+      members: Array.from(
+        new Set([
+          2140, 2121, 2051, 3027, 2153, 2151, 2046, 2007, 2114, 2022, 2000,
+          2154, 2060, 2062, 3053, 3055, 2039, 2001, 2020, 2021, 2049, 2024,
+          2025, 2159, 2175, 2141, 2147, 2123, 2150, 2146, 2178, 3041, 2124,
+          2170, 2179, 2003, 2004, 2043, 2044, 2045, 2032, 3039, 2189, 2048,
+          2129, 3001, 2111, 4022, 2047, 2068, 2069, 2050, 2071,
+        ]),
+      ),
     },
     {
       name: 'team-3',
-      members: [
-        'Ahlam Boukernafa',
-        'Tamer Amin',
-        'siham mosa',
-        'heyam hajaj',
-        'Mohammad Bsoul',
-        'Rula Jaaror',
-        'Doaa Alrozi',
-        'Dania Yousef',
-        'Elaf Jbara',
-        'Fayrouz Djihene',
-        'Amina Darlekt',
-        'Omar Ziyad',
-        'Muhammed Ahmedo',
-        'Baker Shamot',
-      ],
+      members: Array.from(
+        new Set([
+          2038, 2107, 2172, 2155, 2162, 3013, 2013, 2012, 2070, 2053, 2054,
+          2055, 2056, 2057, 2108, 2102, 2144, 2188, 2135, 2058, 2059, 2061,
+          2063,
+        ]),
+      ),
     },
   ];
 
-  findTeamByName(name: string): string {
-    const upperName = name.toUpperCase(); // Convert the name to uppercase
-
+  findTeamByName(id: string): string {
     for (const team of this.teams) {
-      const memberFound = team.members.some(
-        (member) => member.toUpperCase() === upperName,
-      );
-      if (memberFound) {
+      if (team.members.includes(Number(id))) {
         return `evest-org-${team.name}-ar`;
       }
     }
