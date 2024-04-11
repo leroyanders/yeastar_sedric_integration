@@ -31,6 +31,10 @@ export interface ICallRecord {
   size: number;
   call_type: string;
   file: string;
+  call_from_number: string;
+  call_from_name: string;
+  call_to_number: string;
+  call_to_name: string;
 }
 
 export interface ApiDownloadRecordingUrlResponse {

@@ -58,7 +58,9 @@ export class QueueProcessor {
         unit_id:
           'call_id' in job.data.record
             ? this.sedricService.findTeamByName(job.data.record.call_to)
-            : this.sedricService.findTeamByName(job.data.record.call_from),
+            : this.sedricService.findTeamByName(
+                job.data.record.call_from_number,
+              ),
         recording_type: extension,
         timestamp:
           'call_id' in job.data.record
@@ -80,7 +82,9 @@ export class QueueProcessor {
         unit_id:
           'call_id' in job.data.record
             ? this.sedricService.findTeamByName(job.data.record.call_to)
-            : this.sedricService.findTeamByName(job.data.record.call_from),
+            : this.sedricService.findTeamByName(
+                job.data.record.call_from_number,
+              ),
         recording_type: extension,
         timestamp:
           'call_id' in job.data.record
