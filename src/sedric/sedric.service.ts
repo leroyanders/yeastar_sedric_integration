@@ -2,13 +2,102 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import fs from 'fs';
 import mime from 'mime-types';
-import axios, { AxiosResponse } from 'axios';
-import { IUploadUrlResponse } from './sedric.interface';
+import axios, { AxiosHeaders, AxiosResponse } from 'axios';
+import { ISedricTeam, IUploadUrlResponse } from './sedric.interface';
 import moment from 'moment';
 
 @Injectable()
 export class SedricService {
   constructor(private configService: ConfigService) {}
+
+  private teams: ISedricTeam[] = [
+    {
+      name: 'team-1',
+      members: [
+        'Rabea Nijim',
+        'Wael Elias',
+        'Nizar Asaad',
+        'Ibrahim Ahmad',
+        'Muhammad Milhem',
+        'Yasser Morad',
+        'Michael Abawi',
+        'christian abi samra',
+        'john louis',
+        'basel riziq',
+        'Sandy Habib',
+        'Iyad Kriem',
+      ],
+    },
+    {
+      name: 'team-2',
+      members: [
+        'Amal Dyab',
+        'Diaa Dasoky',
+        'Nimer Shahen',
+        'Qasem akry',
+        'Mtanes Nsere',
+        'Mohannad Salem',
+        'Bolous',
+        'ahmad nasser',
+        'Rafiq Helu',
+        'Ahmad Faour',
+        'jad rabeaa',
+        'Loai Swaaed',
+        'Lama Mansour',
+        'mohamad Abu liel',
+        'Abed Habashi',
+        'Ahmad Agbaria',
+        'Mohannad Saleh',
+        'Milad Sliman',
+        'Tofeq atiye',
+        'Tawfeek Armaly',
+        'mohamad kenaan',
+        'Sari Matar',
+        'Tojan salti',
+        'Mohammad Odeh',
+        'Remah Soliman',
+        'Layale Alwan',
+        'Tarek Zatme',
+        'Azez Knane',
+        'Donia abdullah',
+        'mahmod abu ahmad',
+      ],
+    },
+    {
+      name: 'team-3',
+      members: [
+        'Ahlam Boukernafa',
+        'Tamer Amin',
+        'siham mosa',
+        'heyam hajaj',
+        'Mohammad Bsoul',
+        'Rula Jaaror',
+        'Doaa Alrozi',
+        'Dania Yousef',
+        'Elaf Jbara',
+        'Fayrouz Djihene',
+        'Amina Darlekt',
+        'Omar Ziyad',
+        'Muhammed Ahmedo',
+        'Baker Shamot',
+      ],
+    },
+  ];
+
+  findTeamByName(name: string): string {
+    const upperName = name.toUpperCase(); // Convert the name to uppercase
+
+    for (const team of this.teams) {
+      const memberFound = team.members.some(
+        (member) => member.toUpperCase() === upperName,
+      );
+      if (memberFound) {
+        return `evest-org-${team.name}-ar`;
+      }
+    }
+
+    return 'evest-org-team-2-ar';
+  }
 
   parseUserId(input: string): {
     user_id: string;
@@ -19,7 +108,10 @@ export class SedricService {
     const match = input.match(regex);
 
     if (!match || !match.groups) {
-      throw new Error('Invalid input format');
+      return {
+        user_id: input,
+        metadata: { extension: input },
+      };
     }
 
     // Extracting user ID and extension using named capturing groups
@@ -61,7 +153,7 @@ export class SedricService {
       const response = await axios.put(upload.url, stream, {
         headers: {
           'Content-Type': mimeType,
-          ...upload.headers,
+          ...(upload.headers as unknown as AxiosHeaders),
         },
       });
 

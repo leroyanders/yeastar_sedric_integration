@@ -4,6 +4,11 @@ export interface IUploadUrlResponse {
   data: UploadData;
 }
 
+export type ISedricTeam = {
+  name: string;
+  members: string[];
+};
+
 interface UploadUrlHeaders {
   'content-type': string;
   'x-goog-meta-id': string;
@@ -16,11 +21,11 @@ interface UploadUrlHeaders {
   'x-goog-meta-external_interaction_id': string;
   'x-goog-meta-unit_id': string;
   'x-goog-meta-language': string;
-  'x-goog-meta-audit': string; // JSON string
-  'x-goog-meta-tasks': string; // JSON string
-  'x-goog-meta-metadata': string; // JSON string
-  'x-goog-meta-kind': string; // JSON string
-  'x-goog-meta-status': string; // JSON string
+  'x-goog-meta-audit': string;
+  'x-goog-meta-tasks': string;
+  'x-goog-meta-metadata': string;
+  'x-goog-meta-kind': string;
+  'x-goog-meta-status': string;
 }
 
 interface UploadData {

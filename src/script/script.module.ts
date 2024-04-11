@@ -73,7 +73,6 @@ export class ScriptModule implements OnModuleInit {
       })
       .catch((err) => {
         this.logger.error(err);
-        console.error(err);
       });
   }
 }

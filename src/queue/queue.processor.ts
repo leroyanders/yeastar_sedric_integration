@@ -54,16 +54,20 @@ export class QueueProcessor {
         job.data.downloadUrl,
       );
 
+      const { user_id, metadata } = this.sedricService.parseUserId(
+        job.data.record.call_from,
+      );
+
       const extension = job.data.downloadUrl.file.split('.').pop().slice(0, 3);
       const url = await this.sedricService.generateUploadUrl({
-        user_id: job.data.record.call_from,
+        user_id,
         prospect_id: job.data.record.call_to,
-        unit_id: this.configService.get('SEDRIC_UNIT_ID'),
+        unit_id: this.sedricService.findTeamByName(user_id),
         recording_type: extension,
         timestamp: job.data.record.time_start,
         topic: 'New CDR',
         api_key: this.configService.get('SEDRIC_API_KEY'),
-        metadata: { extension: job.data.record.call_from },
+        metadata,
       });
 
       await this.sedricService.uploadRecording(file, url);
@@ -72,20 +76,20 @@ export class QueueProcessor {
       });
 
       this.logger.log(`Successfully download record PBX and sent`, {
-        user_id: job.data.record.call_from,
+        user_id,
         prospect_id: job.data.record.call_to,
-        unit_id: this.configService.get('SEDRIC_UNIT_ID'),
+        unit_id: this.sedricService.findTeamByName(user_id),
         recording_type: extension,
         timestamp: job.data.record.time_start,
         topic: 'New CDR',
         api_key: this.configService.get('SEDRIC_API_KEY'),
         uploadURL: url.url,
         downloadURL: job.data.downloadUrl,
-        metadata: { extension: job.data.record.call_from },
+        metadata,
         record: job.data.record,
       });
     } catch (e) {
-      console.log(e);
+      this.logger.error(e);
     }
   }
 
@@ -114,7 +118,7 @@ export class QueueProcessor {
       const url = await this.sedricService.generateUploadUrl({
         user_id,
         prospect_id: job.data.record.call_to,
-        unit_id: this.configService.get('SEDRIC_UNIT_ID'),
+        unit_id: this.sedricService.findTeamByName(user_id),
         recording_type: extension,
         timestamp: job.data.record.time,
         topic: 'New CDR',
@@ -130,7 +134,7 @@ export class QueueProcessor {
       this.logger.log(`Successfully download record and sent`, {
         user_id,
         prospect_id: job.data.record.call_to,
-        unit_id: this.configService.get('SEDRIC_UNIT_ID'),
+        unit_id: this.sedricService.findTeamByName(user_id),
         recording_type: extension,
         timestamp: job.data.record.time,
         topic: 'New CDR',
@@ -141,7 +145,7 @@ export class QueueProcessor {
         record: job.data.record,
       });
     } catch (e) {
-      console.log(e);
+      this.logger.error(e);
     }
   }
 
