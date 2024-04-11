@@ -35,32 +35,29 @@ export class ScriptModule implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // 1. Auth
     this.yeastarService
       .initialize()
       .then(async ({ accessToken }) => {
-        this.logger.log(accessToken);
-
-        // 3. Fetch records & save to array
+        this.logger.debug(accessToken);
         this.yeastarService
           .fetchRecordingList(this.page, this.pageSize)
           .then(async (recordingList: IApiRecordsListResponse) => {
             const { total_number } = recordingList;
 
             this.pagesCount = Math.ceil(total_number / this.pageSize);
+            this.logger.debug(`Pages count: ${this.pagesCount}`);
+
             for (this.page; this.page <= this.pagesCount; this.page++) {
               const response = await this.yeastarService.fetchRecordingList(
                 this.page,
                 this.pageSize,
               );
 
-              // 4. Save records
               response.data.forEach((record) => this.recordsList.push(record));
 
-              // 5. Send each record to queue
               if (this.page === this.pagesCount) {
                 for (const record of this.recordsList) {
-                  await this.pbxQueue.add('process', {
+                  await this.pbxQueue.add('processRecording', {
                     record,
                   });
                 }

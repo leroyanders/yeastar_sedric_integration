@@ -16,13 +16,14 @@ export class QueueProcessor {
   private readonly logger = new Logger(QueueProcessor.name);
 
   constructor(
-    @InjectQueue('pbx') private readonly pbxQueue: Queue,
     private configService: ConfigService,
     private yeastarService: YeastarService,
     private sedricService: SedricService,
+
+    @InjectQueue('pbx') private readonly pbxQueue: Queue,
   ) {}
 
-  @Process('delete_file')
+  @Process('deleteRecording')
   async handleDeleteFile(
     job: Job<{
       path: string;
@@ -37,23 +38,15 @@ export class QueueProcessor {
       });
   }
 
-  @Process('pbx_download')
-  async handlePBXDownload(
+  @Process('sendRecording')
+  async handleSendRecord(
     job: Job<{
-      record: IInnerMessage;
+      record: IInnerMessage | ICallRecord;
       downloadUrl: ApiDownloadRecordingUrlResponse;
+      file: string;
     }>,
   ) {
-    this.logger.debug(
-      `Downloading PBX record from: ${job.data.downloadUrl.download_resource_url}`,
-      job.data.record.call_id,
-    );
-
     try {
-      const file = await this.yeastarService.downloadRecording(
-        job.data.downloadUrl,
-      );
-
       const { user_id, metadata } = this.sedricService.parseUserId(
         job.data.record.call_from,
       );
@@ -62,25 +55,37 @@ export class QueueProcessor {
       const url = await this.sedricService.generateUploadUrl({
         user_id,
         prospect_id: job.data.record.call_to,
-        unit_id: this.sedricService.findTeamByName(job.data.record.call_from),
+        unit_id:
+          'call_id' in job.data.record
+            ? this.sedricService.findTeamByName(job.data.record.call_to)
+            : this.sedricService.findTeamByName(job.data.record.call_from),
         recording_type: extension,
-        timestamp: job.data.record.time_start,
+        timestamp:
+          'call_id' in job.data.record
+            ? job.data.record.time_start
+            : job.data.record.time,
         topic: 'New CDR',
         api_key: this.configService.get('SEDRIC_API_KEY'),
         metadata,
       });
 
-      await this.sedricService.uploadRecording(file, url);
-      await this.pbxQueue.add('delete_file', {
-        path: file,
+      await this.sedricService.uploadRecording(job.data.file, url);
+      await this.pbxQueue.add('deleteRecording', {
+        path: job.data.file,
       });
 
-      this.logger.log(`Successfully download record PBX and sent`, {
+      this.logger.log(`Successfully download record and sent`, {
         user_id,
         prospect_id: job.data.record.call_to,
-        unit_id: this.sedricService.findTeamByName(job.data.record.call_from),
+        unit_id:
+          'call_id' in job.data.record
+            ? this.sedricService.findTeamByName(job.data.record.call_to)
+            : this.sedricService.findTeamByName(job.data.record.call_from),
         recording_type: extension,
-        timestamp: job.data.record.time_start,
+        timestamp:
+          'call_id' in job.data.record
+            ? job.data.record.time_start
+            : job.data.record.time,
         topic: 'New CDR',
         api_key: this.configService.get('SEDRIC_API_KEY'),
         uploadURL: url.url,
@@ -88,12 +93,12 @@ export class QueueProcessor {
         metadata,
         record: job.data.record,
       });
-    } catch (e) {
-      this.logger.error(e);
+    } catch (error) {
+      this.logger.error(error);
     }
   }
 
-  @Process('download')
+  @Process('downloadRecording')
   async handleDownload(
     job: Job<{
       record: ICallRecord;
@@ -110,97 +115,48 @@ export class QueueProcessor {
         job.data.downloadUrl,
       );
 
-      const { user_id, metadata } = this.sedricService.parseUserId(
-        job.data.record.call_from,
-      );
-
-      const extension = job.data.downloadUrl.file.split('.').pop().slice(0, 3);
-      const url = await this.sedricService.generateUploadUrl({
-        user_id,
-        prospect_id: job.data.record.call_to,
-        unit_id: this.sedricService.findTeamByName(job.data.record.call_from),
-        recording_type: extension,
-        timestamp: job.data.record.time,
-        topic: 'New CDR',
-        api_key: this.configService.get('SEDRIC_API_KEY'),
-        metadata,
-      });
-
-      await this.sedricService.uploadRecording(file, url);
-      await this.pbxQueue.add('delete_file', {
-        path: file,
-      });
-
-      this.logger.log(`Successfully download record and sent`, {
-        user_id,
-        prospect_id: job.data.record.call_to,
-        unit_id: this.sedricService.findTeamByName(job.data.record.call_from),
-        recording_type: extension,
-        timestamp: job.data.record.time,
-        topic: 'New CDR',
-        api_key: this.configService.get('SEDRIC_API_KEY'),
-        uploadURL: url.url,
-        downloadURL: job.data.downloadUrl,
-        metadata,
+      await this.pbxQueue.add('sendRecording', {
         record: job.data.record,
+        downloadUrl: job.data.downloadUrl,
+        file: file,
       });
     } catch (e) {
       this.logger.error(e);
     }
   }
 
-  @Process('process')
-  async handleProcess(job: Job<{ record: ICallRecord }>) {
-    this.logger.debug(
-      'Check for exciting record locally...',
-      job.data.record.id,
-    );
-
-    // 6. Check for exciting record locally
-    const exists = await checkFileExists(job.data.record.file);
-    if (!exists) {
-      this.logger.debug('No exciting record locally');
-
-      // 7. Get record's download URL
-      this.yeastarService
-        .getRecordingDownloadUrl(job.data.record.id)
-        .then(async (downloadUrl: ApiDownloadRecordingUrlResponse) => {
-          // 8. Download record
-          await this.pbxQueue.add('download', {
-            record: job.data.record,
-            downloadUrl,
-          });
-        })
-        .catch(async (err) => {
-          this.logger.error(`Download URL was refused: ${err.message}`);
-        });
+  @Process('processRecording')
+  async handleProcess(job: Job<{ record: ICallRecord | IInnerMessage }>) {
+    if ('id' in job.data.record) {
+      this.logger.debug(
+        'Check for exciting record locally...',
+        job.data.record.id,
+      );
     }
-  }
 
-  @Process('pbx_process')
-  async handlePBXProcess(job: Job<{ record: IInnerMessage }>) {
-    this.logger.debug(
-      `PBX: Check for exciting record locally...: ${job.data.record.call_id}`,
-    );
-
-    // 6. Check for exciting record locally for PBX
-    const exists = await checkFileExists(job.data.record.recording);
-    if (!exists) {
-      this.logger.debug('No exciting record locally');
-
-      // 7. Get record's download URL
-      this.yeastarService
-        .getRecordingDownloadUrl(Number(job.data.record.call_id))
-        .then(async (downloadUrl) => {
-          // 8. Download record
-          await this.pbxQueue.add('pbx_download', {
-            record: job.data.record,
-            downloadUrl,
-          });
-        })
-        .catch(async (err) => {
-          this.logger.error(`Download URL was refused PBX: ${err.message}`);
-        });
+    if ('call_id' in job.data.record) {
+      this.logger.debug(
+        'PBX: Check for exciting record locally...',
+        job.data.record.id,
+      );
     }
+
+    const exists =
+      'file' in job.data.record
+        ? await checkFileExists(job.data.record.file)
+        : await checkFileExists(job.data.record.recording);
+
+    if (!exists) this.logger.debug('No exciting record locally');
+    this.yeastarService
+      .getRecordingDownloadUrl(job.data.record.id)
+      .then(async (downloadUrl: ApiDownloadRecordingUrlResponse) => {
+        await this.pbxQueue.add('downloadRecording', {
+          record: job.data.record,
+          downloadUrl,
+        });
+      })
+      .catch(async (err) => {
+        this.logger.error(`Download URL was refused: ${err.message}`);
+      });
   }
 }

@@ -102,13 +102,13 @@ export class YeastarGateway {
         if (data == 'heartbeat response') return;
 
         try {
+          let record: IInnerMessage;
           const json: IOuterMessage | TErrorResponse = JSON.parse(data);
 
           if ('errcode' in json && json.errcode !== 0) {
             this.logger.error('Error:', json);
           } else if ('msg' in json) {
             const message: IOuterMessage = json as IOuterMessage;
-            let record: IInnerMessage;
 
             try {
               record =
@@ -120,8 +120,19 @@ export class YeastarGateway {
               return;
             }
 
-            if ('type' in record) {
-              await this.pbxQueue.add('pbx_process', { record: record });
+            if (
+              'type' in record &&
+              record.status != 'NO ANSWER' &&
+              record.recording.trim().length > 0
+            ) {
+              // Extract call id and timestamp from string
+              const { id } = this.yeastarService.extractTimestampAndId(
+                record.call_id,
+              );
+
+              await this.pbxQueue.add('processRecording', {
+                record: { ...record, id },
+              });
             }
           }
         } catch (error) {

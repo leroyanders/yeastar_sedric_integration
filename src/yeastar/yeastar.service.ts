@@ -73,13 +73,21 @@ export class YeastarService {
     await this.pbxGateway.initialize();
   }
 
+  extractTimestampAndId(input: string): { timestamp: number; id: number } {
+    const parts = input.split('.');
+    const timestamp = Number(parts[0]);
+    const id = Number(parts[1]);
+
+    return { timestamp, id };
+  }
+
   async updateTokensAndScheduleNextRefresh(authData: IApiTokenResponse) {
+    // Schedule the next refresh slightly before the current token expires
+    const refreshInterval = authData.access_token_expire_time * 1000;
+
     this.accessToken = authData.access_token;
     this.refreshToken = authData.refresh_token;
     this.expireTime = authData.access_token_expire_time * 1000;
-
-    // Schedule the next refresh slightly before the current token expires
-    const refreshInterval = authData.access_token_expire_time * 1000;
     this.logger.debug(`Token will be refreshed in: ${refreshInterval}`);
 
     setTimeout(async () => {
@@ -159,8 +167,8 @@ export class YeastarService {
       this.accessToken = response.data.access_token;
       this.refreshToken = response.data.refresh_token;
       this.expireTime = response.data.access_token_expire_time;
-
       this.logger.debug('Access token refreshed...');
+
       return response.data;
     } catch (error) {
       throw error;
@@ -190,11 +198,11 @@ export class YeastarService {
           map((response: AxiosResponse<IApiRecordsListResponse>) => {
             if (response.data.errcode === 0) {
               return response.data;
-            } else {
-              throw new Error(
-                response.data.errmsg || 'Failed to fetch records list',
-              );
             }
+
+            throw new Error(
+              response.data.errmsg || 'Failed to fetch records list',
+            );
           }),
           catchError((error) => {
             throw error;
@@ -243,16 +251,12 @@ export class YeastarService {
   }
 
   async downloadRecording(downloadUrl: ApiDownloadRecordingUrlResponse) {
-    // Assuming downloadPath constructs the full path including 'downloads' folder
     const fullPath = downloadPath(downloadUrl.file);
-
-    // Ensure the directory part of fullPath exists
     const directory = dirname(fullPath);
 
     // Check if the directory path is not empty and the directory does not exist
-    if (directory && !existsSync(directory)) {
+    if (directory && !existsSync(directory))
       mkdirSync(directory, { recursive: true });
-    }
 
     await new Promise((resolve, reject) => {
       const request = get(downloadUrl.download_resource_url, (response) => {
@@ -262,21 +266,27 @@ export class YeastarService {
               `Failed to download recording, status code: ${response.statusCode}`,
             ),
           );
+        } else {
+          const fileStream = createWriteStream(fullPath);
+
+          // Pipe stream to response
+          response.pipe(fileStream);
+
+          // Handle for stream write end
+          fileStream.on('finish', () => {
+            this.logger.debug(`Recording downloaded at: ${fullPath}`);
+            this.logger.debug(`Downloading recording to: ${fullPath}`);
+
+            // Close stream
+            fileStream.close();
+            // Resolve full path of saved file
+            resolve(fullPath);
+          });
+
+          fileStream.on('error', (error) => {
+            reject(error);
+          });
         }
-
-        this.logger.debug(`Downloading recording to: ${fullPath}`);
-        const fileStream = createWriteStream(fullPath);
-
-        response.pipe(fileStream);
-        fileStream.on('finish', () => {
-          fileStream.close();
-          resolve(fullPath);
-          this.logger.debug(`Recording downloaded at: ${fullPath}`);
-        });
-
-        fileStream.on('error', (error) => {
-          reject(error);
-        });
       });
 
       request.on('error', (error) => reject(error));

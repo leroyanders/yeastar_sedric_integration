@@ -47,6 +47,7 @@ export interface IOuterMessage {
 }
 
 export interface IInnerMessage {
+  id: number;
   call_id: string;
   time_start: string;
   call_from: string;
