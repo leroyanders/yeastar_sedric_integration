@@ -37,21 +37,21 @@ export class QueueProcessor {
       url: IUploadUrlResponse;
     }>,
   ) {
-    this.logger.log(`Successfully download record and sent`, {
-      user_id: job.data.memberName,
-      prospect_id: job.data.record.call_to,
-      unit_id: job.data.team,
-      recording_type: job.data.extension,
-      timestamp: job.data.timestamp,
-      topic: 'New CDR',
-      api_key: job.data.apiKey,
-      uploadURL: job.data.url.url,
-      downloadURL: job.data.downloadUrl,
-      metadata: job.data.metadata,
-      record: job.data.record,
-    });
-
     try {
+      this.logger.log(`Successfully download record and sent`, {
+        user_id: job.data.memberName,
+        prospect_id: job.data.record.call_to,
+        unit_id: job.data.team,
+        recording_type: job.data.extension,
+        timestamp: job.data.timestamp,
+        topic: 'New CDR',
+        api_key: job.data.apiKey,
+        uploadURL: job.data.url.url,
+        downloadURL: job.data.downloadUrl,
+        metadata: job.data.metadata,
+        record: job.data.record,
+      });
+
       await this.pbxQueue.add('deleteRecording', {
         path: job.data.file,
       });
@@ -84,6 +84,8 @@ export class QueueProcessor {
     }>,
   ) {
     try {
+      this.logger.debug(`Sending record ${job.data.record.id}`);
+
       const { metadata } = this.sedricService.parseUserId(
         job.data.record.call_from,
       );
