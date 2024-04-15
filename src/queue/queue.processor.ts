@@ -9,6 +9,7 @@ import {
 } from '../yeastar/yeastar.interface';
 import { checkFileExists, handleFileCleanup } from '../utils/fs';
 import { IInnerMessage } from '../yeastar/yeastar.interface';
+import { IUploadUrlResponse } from '../sedric/sedric.interface';
 
 @Processor('pbx')
 export class QueueProcessor {
@@ -20,6 +21,44 @@ export class QueueProcessor {
 
     @InjectQueue('pbx') private readonly pbxQueue: Queue,
   ) {}
+
+  @Process('finishRecording')
+  async handleAsync(
+    job: Job<{
+      record: IInnerMessage | ICallRecord;
+      downloadUrl: ApiDownloadRecordingUrlResponse;
+      file: string;
+      memberName: string;
+      team: string;
+      extension: string;
+      timestamp: string;
+      apiKey: string;
+      metadata: { extenstion: string };
+      url: IUploadUrlResponse;
+    }>,
+  ) {
+    this.logger.log(`Successfully download record and sent`, {
+      user_id: job.data.memberName,
+      prospect_id: job.data.record.call_to,
+      unit_id: job.data.team,
+      recording_type: job.data.extension,
+      timestamp: job.data.timestamp,
+      topic: 'New CDR',
+      api_key: job.data.apiKey,
+      uploadURL: job.data.url.url,
+      downloadURL: job.data.downloadUrl,
+      metadata: job.data.metadata,
+      record: job.data.record,
+    });
+
+    try {
+      await this.pbxQueue.add('deleteRecording', {
+        path: job.data.file,
+      });
+    } catch (e) {
+      this.logger.error(e);
+    }
+  }
 
   @Process('deleteRecording')
   async handleDeleteFile(
@@ -73,27 +112,19 @@ export class QueueProcessor {
         metadata,
       });
 
-      await this.sedricService
-        .uploadRecording(job.data.file, url)
-        .finally(async () => {
-          this.logger.log(`Successfully download record and sent`, {
-            user_id: memberName,
-            prospect_id: job.data.record.call_to,
-            unit_id: team,
-            recording_type: extension,
-            timestamp,
-            topic: 'New CDR',
-            api_key: apiKey,
-            uploadURL: url.url,
-            downloadURL: job.data.downloadUrl,
-            metadata,
-            record: job.data.record,
-          });
-
-          await this.pbxQueue.add('deleteRecording', {
-            path: job.data.file,
-          });
-        });
+      await this.sedricService.uploadRecording(job.data.file, url);
+      await this.pbxQueue.add('finishRecording', {
+        record: job.data.record,
+        downloadUrl: job.data.downloadUrl,
+        file: job.data.file,
+        memberName,
+        team,
+        extension,
+        timestamp,
+        apiKey,
+        metadata,
+        url,
+      });
     } catch (error) {
       this.logger.error(error);
     }
