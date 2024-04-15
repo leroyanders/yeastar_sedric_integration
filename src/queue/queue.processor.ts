@@ -53,6 +53,7 @@ export class QueueProcessor {
         'call_id' in job.data.record
           ? job.data.record.call_to
           : job.data.record.call_from_number,
+        'call_id' in job.data.record ? null : job.data.record.call_from_name,
       );
 
       const timestamp =
@@ -72,9 +73,9 @@ export class QueueProcessor {
         metadata,
       });
 
-      this.sedricService
+      await this.sedricService
         .uploadRecording(job.data.file, url)
-        .then(async () => {
+        .finally(async () => {
           this.logger.log(`Successfully download record and sent`, {
             user_id: memberName,
             prospect_id: job.data.record.call_to,
@@ -92,9 +93,6 @@ export class QueueProcessor {
           await this.pbxQueue.add('deleteRecording', {
             path: job.data.file,
           });
-        })
-        .catch((error) => {
-          throw error;
         });
     } catch (error) {
       this.logger.error(error);

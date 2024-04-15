@@ -216,7 +216,10 @@ export class SedricService {
     },
   ];
 
-  findMemberById(id: string): {
+  findMemberById(
+    id: string,
+    name?: string,
+  ): {
     apiKey: string;
     memberName: string;
     team: string;
@@ -225,7 +228,7 @@ export class SedricService {
 
     for (const team of this.teams) {
       for (const member of team.members) {
-        if (member.id.has(numId)) {
+        if (member.id.has(numId) || (name && member.name === name)) {
           return {
             team: team.name,
             memberName: member.name,
@@ -237,7 +240,7 @@ export class SedricService {
 
     return {
       team: 'evest-org-team-2-ar',
-      memberName: id,
+      memberName: name || id,
       apiKey: this.configService.get('SEDRIC_API_KEY'),
     };
   }
