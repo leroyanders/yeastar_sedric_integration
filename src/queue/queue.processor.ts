@@ -8,7 +8,6 @@ import {
   ICallRecord,
 } from '../yeastar/yeastar.interface';
 import { checkFileExists, handleFileCleanup } from '../utils/fs';
-import { ConfigService } from '@nestjs/config';
 import { IInnerMessage } from '../yeastar/yeastar.interface';
 
 @Processor('pbx')
@@ -16,7 +15,6 @@ export class QueueProcessor {
   private readonly logger = new Logger(QueueProcessor.name);
 
   constructor(
-    private configService: ConfigService,
     private yeastarService: YeastarService,
     private sedricService: SedricService,
 
@@ -47,56 +45,57 @@ export class QueueProcessor {
     }>,
   ) {
     try {
-      const { user_id, metadata } = this.sedricService.parseUserId(
+      const { metadata } = this.sedricService.parseUserId(
         job.data.record.call_from,
       );
 
+      const { team, memberName, apiKey } = this.sedricService.findMemberById(
+        'call_id' in job.data.record
+          ? job.data.record.call_to
+          : job.data.record.call_from_number,
+      );
+
+      const timestamp =
+        'call_id' in job.data.record
+          ? job.data.record.time_start
+          : job.data.record.time;
+
       const extension = job.data.downloadUrl.file.split('.').pop().slice(0, 3);
       const url = await this.sedricService.generateUploadUrl({
-        user_id,
+        user_id: memberName,
         prospect_id: job.data.record.call_to,
-        unit_id:
-          'call_id' in job.data.record
-            ? this.sedricService.findTeamByName(job.data.record.call_to)
-            : this.sedricService.findTeamByName(
-                job.data.record.call_from_number,
-              ),
+        unit_id: team,
         recording_type: extension,
-        timestamp:
-          'call_id' in job.data.record
-            ? job.data.record.time_start
-            : job.data.record.time,
+        timestamp,
         topic: 'New CDR',
-        api_key: this.configService.get('SEDRIC_API_KEY'),
+        api_key: apiKey,
         metadata,
       });
 
-      await this.sedricService.uploadRecording(job.data.file, url);
-      await this.pbxQueue.add('deleteRecording', {
-        path: job.data.file,
-      });
+      this.sedricService
+        .uploadRecording(job.data.file, url)
+        .then(async () => {
+          this.logger.log(`Successfully download record and sent`, {
+            user_id: memberName,
+            prospect_id: job.data.record.call_to,
+            unit_id: team,
+            recording_type: extension,
+            timestamp,
+            topic: 'New CDR',
+            api_key: apiKey,
+            uploadURL: url.url,
+            downloadURL: job.data.downloadUrl,
+            metadata,
+            record: job.data.record,
+          });
 
-      this.logger.log(`Successfully download record and sent`, {
-        user_id,
-        prospect_id: job.data.record.call_to,
-        unit_id:
-          'call_id' in job.data.record
-            ? this.sedricService.findTeamByName(job.data.record.call_to)
-            : this.sedricService.findTeamByName(
-                job.data.record.call_from_number,
-              ),
-        recording_type: extension,
-        timestamp:
-          'call_id' in job.data.record
-            ? job.data.record.time_start
-            : job.data.record.time,
-        topic: 'New CDR',
-        api_key: this.configService.get('SEDRIC_API_KEY'),
-        uploadURL: url.url,
-        downloadURL: job.data.downloadUrl,
-        metadata,
-        record: job.data.record,
-      });
+          await this.pbxQueue.add('deleteRecording', {
+            path: job.data.file,
+          });
+        })
+        .catch((error) => {
+          throw error;
+        });
     } catch (error) {
       this.logger.error(error);
     }
@@ -145,10 +144,11 @@ export class QueueProcessor {
       );
     }
 
-    const exists =
+    const exists = await checkFileExists(
       'file' in job.data.record
-        ? await checkFileExists(job.data.record.file)
-        : await checkFileExists(job.data.record.recording);
+        ? job.data.record.file
+        : job.data.record.recording,
+    );
 
     if (!exists) this.logger.debug('No exciting record locally');
     this.yeastarService

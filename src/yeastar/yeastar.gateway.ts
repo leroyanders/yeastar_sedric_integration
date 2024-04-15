@@ -36,37 +36,53 @@ export class YeastarGateway {
     );
   }
 
-  private async sendMessage(data: any) {
-    if (this.client.readyState === WebSocket.OPEN) {
-      if (typeof data === 'string') {
-        this.client.send(data);
-      } else {
-        this.client.send(JSON.stringify(data));
-      }
-    } else {
+  private async sendMessage(data: any): Promise<void> {
+    if (this.client.readyState !== WebSocket.OPEN) {
       this.logger.error(
         'Cannot send message: WebSocket is not open. Queuing message.',
       );
-
       await this.shutdown();
+      return;
+    }
+
+    this.sendBasedOnType(data);
+  }
+
+  /**
+   * Sends the provided data based on its type. If the data is a string,
+   * it sends directly; otherwise, it converts to JSON string before sending.
+   * @param data - The data to send.
+   */
+  private sendBasedOnType(data: string | object): void {
+    if (typeof data === 'string') {
+      this.client.send(data);
+    } else {
+      this.client.send(JSON.stringify(data));
     }
   }
 
   async shutdown() {
     this.logger.debug('Shutting down PBX WebSocket gateway...');
 
-    // Clear the heartbeat interval if it has been set
-    if (this.heartbeatIntervalId) {
-      clearInterval(this.heartbeatIntervalId);
-      this.heartbeatIntervalId = null;
-    }
-
-    // Close the WebSocket client if it's not already closed
-    if (this.client && this.client.readyState === WebSocket.OPEN) {
+    if (this.heartbeatIntervalId) clearInterval(this.heartbeatIntervalId);
+    if (this.client && this.client.readyState === WebSocket.OPEN)
       this.client.close();
-    }
 
+    this.heartbeatIntervalId = null;
     this.logger.debug('PBX WebSocket gateway shut down successfully.');
+  }
+
+  private async processRecord(record: IInnerMessage) {
+    if (
+      'type' in record &&
+      record.status != 'NO ANSWER' &&
+      record.recording.trim().length > 0
+    ) {
+      const { id } = this.yeastarService.extractTimestampAndId(record.call_id);
+      await this.pbxQueue.add('processRecording', {
+        record: { ...record, id },
+      });
+    }
   }
 
   private connectToWebSocket() {
@@ -90,50 +106,29 @@ export class YeastarGateway {
 
     registerEmitter('open', async () => {
       await this.sendMessage({ topic_list: [30012] });
-
-      // Send heartbeat every 5 seconds
       this.heartbeatIntervalId = setInterval(async () => {
         await this.sendMessage('heartbeat');
       }, 5000);
 
-      // Listen for messages
       registerEmitter('message', async (data: string | null) => {
         if (data == null) return;
         if (data == 'heartbeat response') return;
 
         try {
-          let record: IInnerMessage;
           const json: IOuterMessage | TErrorResponse = JSON.parse(data);
 
           if ('errcode' in json && json.errcode !== 0) {
             this.logger.error('Error:', json);
-          } else if ('msg' in json) {
+          }
+
+          if ('msg' in json) {
             const message: IOuterMessage = json as IOuterMessage;
+            const record: IInnerMessage =
+              typeof message.msg === 'string'
+                ? JSON.parse(message.msg)
+                : message.msg;
 
-            try {
-              record =
-                typeof message.msg === 'string'
-                  ? JSON.parse(message.msg)
-                  : message.msg;
-            } catch (error) {
-              this.logger.error('Failed to parse json.msg:', message.msg);
-              return;
-            }
-
-            if (
-              'type' in record &&
-              record.status != 'NO ANSWER' &&
-              record.recording.trim().length > 0
-            ) {
-              // Extract call id and timestamp from string
-              const { id } = this.yeastarService.extractTimestampAndId(
-                record.call_id,
-              );
-
-              await this.pbxQueue.add('processRecording', {
-                record: { ...record, id },
-              });
-            }
+            await this.processRecord(record);
           }
         } catch (error) {
           this.logger.error('Failed to parse JSON:', error);
@@ -148,12 +143,10 @@ export class YeastarGateway {
     };
 
     registerEmitter('close', () => {
-      if (this.heartbeatIntervalId) {
-        clearInterval(this.heartbeatIntervalId);
-        this.heartbeatIntervalId = null;
-      }
+      if (this.heartbeatIntervalId) clearInterval(this.heartbeatIntervalId);
 
       this.logger.debug('Disconnected from PBX WebSocket.');
+      this.heartbeatIntervalId = null;
     });
 
     registerEmitter('close', errorProcessor);
