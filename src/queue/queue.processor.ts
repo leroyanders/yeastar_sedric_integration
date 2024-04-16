@@ -56,7 +56,7 @@ export class QueueProcessor {
         path: job.data.file,
       });
     } catch (e) {
-      this.logger.error(e);
+      this.logger.error(e, job.data.record);
     }
   }
 
@@ -71,7 +71,7 @@ export class QueueProcessor {
         this.logger.debug('File was deleted:', job.data.path);
       })
       .catch((error) => {
-        this.logger.error('Unable to delete file', error);
+        this.logger.error('Unable to delete file', error, job.data.path);
       });
   }
 
@@ -128,7 +128,7 @@ export class QueueProcessor {
         url,
       });
     } catch (error) {
-      this.logger.error(error);
+      this.logger.error(error, job.data.record);
     }
   }
 
@@ -155,7 +155,7 @@ export class QueueProcessor {
         file: file,
       });
     } catch (e) {
-      this.logger.error(e);
+      this.logger.error(e, job.data.record);
     }
   }
 
@@ -191,7 +191,10 @@ export class QueueProcessor {
         });
       })
       .catch(async (err) => {
-        this.logger.error(`Download URL was refused: ${err.message}`);
+        this.logger.error(
+          `Download URL was refused: ${err.message}`,
+          job.data.record,
+        );
       });
   }
 }
