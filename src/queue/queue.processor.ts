@@ -92,7 +92,7 @@ export class QueueProcessor {
 
       const { team, memberName, apiKey } = this.sedricService.findMemberById(
         'call_id' in job.data.record
-          ? job.data.record.call_to
+          ? job.data.record.call_from
           : job.data.record.call_from_number,
         'call_id' in job.data.record ? null : job.data.record.call_from_name,
       );
