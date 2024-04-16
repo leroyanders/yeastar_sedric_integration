@@ -215,11 +215,11 @@ export class YeastarService {
   }
 
   async getRecordingDownloadUrl(
-    recordingId: number,
+    recordingId: string,
   ): Promise<ApiDownloadRecordingUrlResponse> {
     const params = new URLSearchParams({
       access_token: this.accessToken,
-      id: recordingId.toString(),
+      file: recordingId.toString(),
     });
 
     const apiUrl = this.configService.get('YEASTAR_API_URL');

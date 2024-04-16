@@ -1,5 +1,5 @@
 import { InjectQueue, Process, Processor } from '@nestjs/bull';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
 import { Job, Queue } from 'bull';
 import { YeastarService } from '../yeastar/yeastar.service';
 import { SedricService } from '../sedric/sedric.service';
@@ -10,6 +10,8 @@ import {
 import { checkFileExists, handleFileCleanup } from '../utils/fs';
 import { IInnerMessage } from '../yeastar/yeastar.interface';
 import { IUploadUrlResponse } from '../sedric/sedric.interface';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @Processor('pbx')
 export class QueueProcessor {
@@ -19,6 +21,7 @@ export class QueueProcessor {
     private yeastarService: YeastarService,
     private sedricService: SedricService,
 
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
     @InjectQueue('pbx') private readonly pbxQueue: Queue,
   ) {}
 
@@ -55,6 +58,8 @@ export class QueueProcessor {
       await this.pbxQueue.add('deleteRecording', {
         path: job.data.file,
       });
+
+      await this.cacheManager.set(String(job.data.record.id), job.data.record);
     } catch (e) {
       this.logger.error(e, job.data.record);
     }
@@ -129,6 +134,11 @@ export class QueueProcessor {
       });
     } catch (error) {
       this.logger.error(error, job.data.record);
+
+      // Delete in case file was not uploaded successfully
+      await this.pbxQueue.add('deleteRecording', {
+        path: job.data.file,
+      });
     }
   }
 
@@ -183,7 +193,11 @@ export class QueueProcessor {
 
     if (!exists) this.logger.debug('No exciting record locally');
     this.yeastarService
-      .getRecordingDownloadUrl(job.data.record.id)
+      .getRecordingDownloadUrl(
+        'file' in job.data.record
+          ? job.data.record.file
+          : job.data.record.recording,
+      )
       .then(async (downloadUrl: ApiDownloadRecordingUrlResponse) => {
         await this.pbxQueue.add('downloadRecording', {
           record: job.data.record,

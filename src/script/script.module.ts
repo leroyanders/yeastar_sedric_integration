@@ -42,7 +42,7 @@ export class ScriptModule implements OnModuleInit {
     this.yeastarService
       .initialize()
       .then(async ({ accessToken }) => {
-        this.logger.debug(accessToken);
+        this.logger.debug(`Provided token: ${accessToken}`);
         this.yeastarService
           .fetchRecordingList(this.page, this.pageSize)
           .then(async (recordingList: IApiRecordsListResponse) => {
@@ -72,10 +72,6 @@ export class ScriptModule implements OnModuleInit {
                   await this.pbxQueue.add('processRecording', {
                     record,
                   });
-                  await this.cacheManager.set(
-                    String(record.id),
-                    JSON.stringify(record),
-                  );
                 }
               }
             }
