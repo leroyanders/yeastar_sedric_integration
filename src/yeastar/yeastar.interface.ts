@@ -7,6 +7,15 @@ export interface IApiTokenResponse {
   refresh_token: string;
 }
 
+export enum ERecordStatus {
+  NOANSWER = 'NO ANSWER',
+}
+
+export enum ECallType {
+  INBOUND = 'Inbound',
+  OUTBOUND = 'Outbound',
+}
+
 export interface IApiRecordsListResponse {
   errcode: number;
   errmsg: string;

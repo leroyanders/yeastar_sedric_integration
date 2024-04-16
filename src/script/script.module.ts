@@ -1,8 +1,9 @@
-import { Logger, Module, OnModuleInit } from '@nestjs/common';
+import { Inject, Logger, Module, OnModuleInit } from '@nestjs/common';
 import { YeastarService } from '../yeastar/yeastar.service';
 import { HttpModule } from '@nestjs/axios';
 import { InjectQueue } from '@nestjs/bull';
 import {
+  ECallType,
   IApiRecordsListResponse,
   ICallRecord,
 } from '../yeastar/yeastar.interface';
@@ -10,6 +11,8 @@ import { Queue } from 'bull';
 import { Agent } from 'https';
 import { QueueModule } from '../queue/queue.module';
 import { YeastarModule } from '../yeastar/yeastar.module';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @Module({
   imports: [
@@ -31,6 +34,7 @@ export class ScriptModule implements OnModuleInit {
 
   constructor(
     private yeastarService: YeastarService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
     @InjectQueue('pbx') private readonly pbxQueue: Queue,
   ) {}
 
@@ -53,13 +57,25 @@ export class ScriptModule implements OnModuleInit {
                 this.pageSize,
               );
 
-              response.data.forEach((record) => this.recordsList.push(record));
+              for (const record of response.data) {
+                const value = await this.cacheManager.get<string>(
+                  String(record.id),
+                );
+
+                if (!value)
+                  record.call_type === ECallType.OUTBOUND &&
+                    this.recordsList.push(record);
+              }
 
               if (this.page === this.pagesCount) {
                 for (const record of this.recordsList) {
                   await this.pbxQueue.add('processRecording', {
                     record,
                   });
+                  await this.cacheManager.set(
+                    String(record.id),
+                    JSON.stringify(record),
+                  );
                 }
               }
             }

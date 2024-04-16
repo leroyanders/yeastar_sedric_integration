@@ -5,12 +5,16 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { forwardRef, Inject, Logger } from '@nestjs/common';
 import {
+  ECallType,
   IInnerMessage,
   IOuterMessage,
+  ERecordStatus,
   TErrorResponse,
 } from './yeastar.interface';
 import { YeastarService } from './yeastar.service';
 import WebSocket from 'ws';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @WebSocketGateway()
 export class YeastarGateway {
@@ -20,8 +24,8 @@ export class YeastarGateway {
 
   constructor(
     private configService: ConfigService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
     @InjectQueue('pbx') private readonly pbxQueue: Queue,
-
     @Inject(forwardRef(() => YeastarService))
     private yeastarService: YeastarService,
   ) {}
@@ -73,15 +77,21 @@ export class YeastarGateway {
   }
 
   private async processRecord(record: IInnerMessage) {
+    if (!('type' in record)) return;
     if (
-      'type' in record &&
-      record.status != 'NO ANSWER' &&
+      record.status !== ERecordStatus.NOANSWER &&
+      record.type === ECallType.OUTBOUND &&
       record.recording.trim().length > 0
     ) {
       const { id } = this.yeastarService.extractTimestampAndId(record.call_id);
-      await this.pbxQueue.add('processRecording', {
-        record: { ...record, id },
-      });
+      const value = await this.cacheManager.get<string>(String(id));
+
+      if (!value) {
+        await this.pbxQueue.add('processRecording', {
+          record: { ...record, id },
+        });
+        await this.cacheManager.set(String(id), JSON.stringify(record));
+      }
     }
   }
 
