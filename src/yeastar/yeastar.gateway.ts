@@ -84,7 +84,7 @@ export class YeastarGateway {
       record.recording.trim().length > 0
     ) {
       const { id } = this.yeastarService.extractTimestampAndId(record.call_id);
-      const value = await this.cacheManager.get<string>(String(id));
+      const value = await this.cacheManager.get(String(id));
 
       if (!value)
         await this.pbxQueue.add('processRecording', {

@@ -58,13 +58,11 @@ export class ScriptModule implements OnModuleInit {
               );
 
               for (const record of response.data) {
-                const value = await this.cacheManager.get<string>(
-                  String(record.id),
-                );
+                const value = await this.cacheManager.get(String(record.id));
 
-                if (!value)
-                  record.call_type === ECallType.OUTBOUND &&
-                    this.recordsList.push(record);
+                if (!value && record.call_type === ECallType.OUTBOUND) {
+                  this.recordsList.push(record);
+                }
               }
 
               if (this.page === this.pagesCount) {
