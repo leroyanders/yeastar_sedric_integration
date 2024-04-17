@@ -1,4 +1,4 @@
-import fs from 'fs/promises';
+import * as fs from 'fs/promises';
 import { join } from 'path';
 
 const downloadDirectory = join(__dirname, '..', '..', 'downloads');
@@ -6,6 +6,7 @@ const downloadDirectory = join(__dirname, '..', '..', 'downloads');
 export const downloadPath = (path: string) => join(downloadDirectory, path);
 
 export const handleFileCleanup = async (filePath: string): Promise<void> => {
+  await fs.chmod(filePath, 0o777);
   await fs.unlink(filePath);
 };
 
