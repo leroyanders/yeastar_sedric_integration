@@ -90,20 +90,31 @@ export class YeastarService {
     this.expireTime = authData.access_token_expire_time * 1000;
     this.logger.debug(`Token will be refreshed in: ${refreshInterval}`);
 
-    setTimeout(async () => {
-      await this.refreshTokenCycle();
-      await this.pbxGateway.shutdown();
-      await this.initializeWebSocketGateway();
-    }, refreshInterval);
+    await new Promise<void>((resolve, reject) => {
+      try {
+        setTimeout(async () => {
+          await this.refreshTokenCycle();
+          await this.pbxGateway.shutdown();
+          await this.initializeWebSocketGateway();
+          resolve();
+        }, refreshInterval);
+      } catch (error) {
+        reject(error);
+      }
+    });
 
     return authData;
   }
 
   async refreshTokenCycle() {
-    const refreshData: IApiTokenResponse = await this.refreshAccessToken(
-      this.refreshToken,
-    );
-    await this.updateTokensAndScheduleNextRefresh(refreshData);
+    try {
+      const refreshData: IApiTokenResponse = await this.refreshAccessToken(
+        this.refreshToken,
+      );
+      await this.updateTokensAndScheduleNextRefresh(refreshData);
+    } catch (error) {
+      throw error;
+    }
   }
 
   async getAccessToken(username: string, password: string) {
